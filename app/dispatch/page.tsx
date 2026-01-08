@@ -53,7 +53,7 @@ export default function DispatchPage() {
           to { transform: translateX(120vw); }
         }
         .animate-drive {
-          animation: drive 5s ease-in-out forwards;
+          animation: drive 6s ease-in-out forwards;
         }
       `}</style>
     </div>

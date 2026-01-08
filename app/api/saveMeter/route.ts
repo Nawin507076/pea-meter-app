@@ -56,6 +56,8 @@ export async function POST(req: NextRequest) {
         payload.timestamp || "",
       ],
     ];
+    console.log("SERVICE ACCOUNT KEY:", process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.slice(0,50));
+    console.log("SHEET ID:", process.env.GOOGLE_SHEET_ID);
 
     // Append ข้อมูลลง Sheet
     await sheets.spreadsheets.values.append({

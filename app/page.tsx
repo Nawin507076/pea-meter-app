@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
@@ -8,7 +8,16 @@ export default function Home() {
   const [jobType, setJobType] = useState("");
   const router = useRouter();
 
-  // รายชื่อเจ้าหน้าที่อัปเดตใหม่ 9 ท่าน
+  // --- ระบบเช็ค In-App Browser (Line, Facebook, etc.) ---
+  useEffect(() => {
+    const ua = navigator.userAgent || navigator.vendor;
+    const isInApp = /FBAN|FBAV|Line|Messenger|Instagram/.test(ua);
+
+    if (isInApp) {
+      alert("📢 เพื่อการใช้งานกล้องและ GPS ที่สมบูรณ์\nกรุณากดปุ่ม 3 จุดที่มุมจอ แล้วเลือก 'เปิดด้วยเบราว์เซอร์หลัก' (Open in Browser)");
+    }
+  }, []);
+
   const workers = [
     "นายรัฐภูมิ เต้าตะโร",
     "นายอนันต์สิทธิ์ บุญพรหม",
@@ -27,7 +36,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50 flex justify-center px-4 pt-10 font-sans overflow-x-hidden">
       <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl shadow-slate-200/60 p-8 space-y-10 border border-slate-100 h-fit">
         
-        {/* Header ส่วนหัว */}
+        {/* Header */}
         <div className="text-center space-y-4">
           <div className="inline-block p-4 bg-blue-50 rounded-3xl mb-2 shadow-sm">
             <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -47,7 +56,7 @@ export default function Home() {
         </div>
 
         <div className="space-y-8">
-          {/* ส่วนเลือกผู้ปฏิบัติงาน - ปรับฟอนต์ใหญ่พิเศษ */}
+          {/* เลือกผู้ปฏิบัติงาน */}
           <div className="space-y-4">
             <label className="flex items-center text-xl font-black text-slate-700 ml-2">
               <span className="mr-3 text-2xl">👷‍♂️</span> ผู้ปฏิบัติงาน
@@ -71,7 +80,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ลักษณะงาน (Option Cards) */}
+          {/* ลักษณะงาน */}
           <div className="space-y-4">
             <label className="flex items-center text-xl font-black text-slate-700 ml-2">
               <span className="mr-3 text-2xl">⚡</span> ลักษณะงานที่ปฏิบัติ
@@ -130,7 +139,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ปุ่มเริ่มงาน - ใหญ่พิเศษ */}
+          {/* ปุ่มเริ่มงาน */}
           <button
             disabled={!isReady}
             onClick={() => {
@@ -144,7 +153,7 @@ export default function Home() {
             className={`
               w-full rounded-[2.5rem] py-7 text-2xl font-black transition-all shadow-2xl
               ${isReady
-                ? "bg-blue-600 text-white shadow-blue-200 hover:bg-blue-700 active:scale-95 translate-y-0"
+                ? "bg-blue-600 text-white shadow-blue-200 hover:bg-blue-700 active:scale-95"
                 : "bg-slate-100 text-slate-300 cursor-not-allowed shadow-none"
               }`}
           >

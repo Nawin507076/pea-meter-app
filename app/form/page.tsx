@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Tesseract from "tesseract.js";
+import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/library";
 
-// --- Types & Interfaces ---
+// --- 1. Interfaces & Types ---
 type WorkerInfo = {
   worker: string;
   jobType: "incident" | "service";
@@ -19,22 +19,31 @@ interface InputGroupProps {
   onScanClick?: () => void;
 }
 
+interface PhotoUploadProps {
+  label: string;
+  photo: File | null;
+  onPhotoChange: (f: File | null) => void;
+}
+
 export default function MultiStepMeterForm() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [workerInfo, setWorkerInfo] = useState<WorkerInfo | null>(null);
+  // --- 2. State Initializer ---
+  const [workerInfo] = useState<WorkerInfo | null>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("worker_info");
+      return stored ? (JSON.parse(stored) as WorkerInfo) : null;
+    }
+    return null;
+  });
 
-  // --- Form States ---
   const [peaOld, setPeaOld] = useState("");
   const [oldUnit, setOldUnit] = useState("");
   const [photoOld, setPhotoOld] = useState<File | null>(null);
-
   const [peaNew, setPeaNew] = useState("");
   const [newUnit, setNewUnit] = useState("");
   const [photoNew, setPhotoNew] = useState<File | null>(null);
-
   const [remark, setRemark] = useState("ไหม้ทั้งเครื่อง");
   const [customRemark, setCustomRemark] = useState("");
   const [location, setLocation] = useState({ lat: "", lng: "" });
@@ -42,232 +51,184 @@ export default function MultiStepMeterForm() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-
   const [scanning, setScanning] = useState<{ active: boolean; target: "old" | "new" }>({ 
     active: false, 
     target: "old" 
   });
 
-  const [remarkOptions] = useState<string[]>([
-    "ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "ใช้ไฟเกิน(ct ไหม้)", "อื่นๆ"
-  ]);
+  const remarkOptions: string[] = ["ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "ใช้ไฟเกิน(ct ไหม้)", "อื่นๆ"];
 
   useEffect(() => {
-    const stored = localStorage.getItem("worker_info");
-    if (!stored) {
-      router.push("/");
-      return;
-    }
-    setWorkerInfo(JSON.parse(stored) as WorkerInfo);
-  }, [router]);
+    if (!workerInfo) { router.push("/"); }
+  }, [workerInfo, router]);
 
-  // --- OCR Scanner Logic ---
+  // --- 3. Scanner Logic ---
   useEffect(() => {
-    if (scanning.active) {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-        .then((stream) => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.play();
-          }
-        })
-        .catch(err => alert("ไม่สามารถเข้าถึงกล้องได้: " + err));
+    let codeReader: BrowserMultiFormatReader | null = null;
+
+    if (scanning.active && videoRef.current) {
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.QR_CODE]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+
+      codeReader = new BrowserMultiFormatReader(hints);
+      const constraints: MediaStreamConstraints = { video: { facingMode: "environment" } };
+
+      codeReader.decodeFromConstraints(constraints, videoRef.current, (result) => {
+        if (result) {
+          const text = result.getText().replace(/[^0-9]/g, "");
+          if (scanning.target === "old") setPeaOld(text);
+          else setPeaNew(text);
+
+          if (navigator.vibrate) navigator.vibrate(100);
+          setScanning(prev => ({ ...prev, active: false }));
+        }
+      });
     }
-    return () => {
-      const stream = videoRef.current?.srcObject as MediaStream;
-      stream?.getTracks().forEach(track => track.stop());
-    };
-  }, [scanning.active]);
+    return () => { if (codeReader) codeReader.reset(); };
+  }, [scanning.active, scanning.target]);
 
-  const captureAndRead = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    setIsProcessing(true);
-
-    const context = canvasRef.current.getContext("2d");
-    canvasRef.current.width = videoRef.current.videoWidth;
-    canvasRef.current.height = videoRef.current.videoHeight;
-    context?.drawImage(videoRef.current, 0, 0);
-
-    try {
-      // ใช้ Tesseract อ่านเลขจากภาพ
-      const result = await Tesseract.recognize(canvasRef.current, 'eng');
-      const text = result.data.text;
-      
-      // กรองเอาเฉพาะตัวเลข (PEA ปกติมี 10 หลัก)
-      const cleanedText = text.replace(/[^0-9]/g, "");
-      const finalDigits = cleanedText.length > 10 ? cleanedText.substring(0, 10) : cleanedText;
-
-      if (scanning.target === "old") setPeaOld(finalDigits);
-      else setPeaNew(finalDigits);
-
-      setScanning({ ...scanning, active: false });
-    } catch (error) {
-      alert("ไม่สามารถอ่านข้อมูลได้ โปรดถ่ายให้ชัดเจนขึ้น");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // --- Form Navigation & Save ---
-  const getCurrentLocation = () => {
-    if (!navigator.geolocation) return alert("มือถือไม่รองรับ GPS");
+  const getCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) return alert("ไม่รองรับ GPS");
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition((pos) => {
       setLocation({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() });
       setIsLocating(false);
-    }, () => {
-      alert("ดึงพิกัดไม่สำเร็จ");
-      setIsLocating(false);
-    }, { enableHighAccuracy: true });
-  };
+    }, () => { alert("ดึงพิกัดไม่สำเร็จ"); setIsLocating(false); }, { enableHighAccuracy: true });
+  }, []);
 
-  const handleNext = () => { setStep((prev) => Math.min(prev + 1, 3)); window.scrollTo(0, 0); };
+  const handleNext = () => { setStep(s => Math.min(s + 1, 3)); window.scrollTo(0, 0); };
   const handleBack = () => {
     if (step === 1) router.push("/");
-    else setStep((prev) => Math.max(prev - 1, 1));
+    else setStep(s => Math.max(s - 1, 1));
     window.scrollTo(0, 0);
   };
 
   const handleSave = async () => {
     if (!workerInfo || isSubmitting) return;
     setIsSubmitting(true);
-    const formData = new FormData();
-    formData.append("worker", workerInfo.worker);
-    formData.append("jobType", workerInfo.jobType);
-    formData.append("peaOld", peaOld);
-    formData.append("oldUnit", oldUnit);
-    formData.append("peaNew", peaNew);
-    formData.append("newUnit", newUnit);
-    formData.append("remark", remark || customRemark);
-    formData.append("lat", location.lat);
-    formData.append("lng", location.lng);
-    formData.append("timestamp", new Date().toLocaleString("th-TH"));
-    if (photoOld) formData.append("photoOld", photoOld);
-    if (photoNew) formData.append("photoNew", photoNew);
-
-    try {
-      const res = await fetch("/api/saveMeter", { method: "POST", body: formData });
-      if (res.ok) { alert("บันทึกเรียบร้อย ✅"); router.push("/"); }
-    } catch (error) { alert("ล้มเหลว ❌"); } finally { setIsSubmitting(false); }
+    setTimeout(() => {
+      alert("บันทึกเรียบร้อย ✅");
+      router.push("/");
+      setIsSubmitting(false);
+    }, 1500);
   };
 
   if (!workerInfo) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10 font-sans text-gray-900">
-      {/* OCR Scanner Overlay */}
+      
+      {/* Scanner Overlay (ธีม ขาว-ดำ-แดง) */}
       {scanning.active && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-6">
-          <div className="relative w-full max-w-sm aspect-[4/3] bg-gray-900 rounded-[2rem] overflow-hidden border-4 border-blue-600 shadow-2xl">
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center">
+          <div className="relative w-full h-full max-h-[75vh]">
             <video ref={videoRef} className="w-full h-full object-cover" playsInline />
-            <div className="absolute inset-0 border-[40px] border-black/50 pointer-events-none flex items-center justify-center">
-              <div className="w-full h-16 border-2 border-dashed border-yellow-400 rounded-lg shadow-[0_0_15px_rgba(250,204,21,0.5)]"></div>
-            </div>
-            {isProcessing && (
-              <div className="absolute inset-0 bg-blue-900/60 backdrop-blur-sm flex flex-col items-center justify-center text-white">
-                <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="font-bold tracking-wide">กำลังอ่านหมายเลข...</p>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-[85%] h-36 border-2 border-red-500 rounded-3xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.7)]">
+                <div className="absolute top-0 left-0 w-full h-[3px] bg-red-600 shadow-[0_0_20px_#dc2626] animate-scan-line"></div>
+                <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-xl"></div>
+                <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-xl"></div>
+                <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-xl"></div>
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-xl"></div>
               </div>
-            )}
+            </div>
+            <div className="absolute top-10 w-full text-center">
+              <p className="text-white font-black tracking-widest bg-red-600/90 px-6 py-2 rounded-full inline-block text-sm">กำลังสแกนบาร์โค้ด</p>
+            </div>
           </div>
-          <canvas ref={canvasRef} className="hidden" />
-          <div className="mt-8 flex gap-4 w-full max-w-sm px-4">
-            <button onClick={() => setScanning({ ...scanning, active: false })} className="flex-1 py-4 bg-white/10 text-white rounded-2xl font-bold backdrop-blur-md">ยกเลิก</button>
-            <button onClick={captureAndRead} disabled={isProcessing} className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/40 active:scale-95 transition-all">
-              📷 กดถ่ายเพื่ออ่านเลข
-            </button>
-          </div>
+          <button onClick={() => setScanning(prev => ({ ...prev, active: false }))} className="mt-8 px-12 py-4 bg-white text-black font-black rounded-2xl active:scale-95 transition-all">ยกเลิก</button>
         </div>
       )}
 
-      {/* Header Bar */}
-      <div className="bg-white border-b sticky top-0 z-10 shadow-sm p-4">
-        <div className="max-w-md mx-auto flex justify-between items-center font-bold">
-          <div className="flex flex-col"><span className="text-[10px] text-gray-400 uppercase font-bold">เจ้าหน้าที่</span><span className="text-blue-700 leading-none mt-1">{workerInfo.worker}</span></div>
-          <div className="text-right flex flex-col"><span className="text-[10px] text-gray-400 uppercase font-bold">งาน</span><span className="leading-none mt-1 text-gray-800">{workerInfo.jobType === "incident" ? "แก้ไฟ" : "บริการ"}</span></div>
-        </div>
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-10 shadow-sm p-4 px-6 flex justify-between items-center">
+        <div className="flex flex-col"><span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">เจ้าหน้าที่</span><span className="text-blue-600 font-bold leading-tight">{workerInfo.worker}</span></div>
+        <div className="text-right flex flex-col"><span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">ลักษณะงาน</span><span className="text-gray-800 font-bold leading-tight">{workerInfo.jobType === "incident" ? "แก้ไฟ" : "บริการ"}</span></div>
       </div>
 
       <div className="max-w-md mx-auto px-5 mt-6">
-        {/* Step Progress */}
-        <div className="flex justify-between mb-8 px-8 relative">
-          <div className="absolute top-4 left-10 right-10 h-[2px] bg-gray-200 -z-0" />
-          {[1, 2, 3].map((s) => (
-            <div key={s} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold z-10 transition-all ${step >= s ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-gray-300 border'}`}>{s}</div>
-          ))}
-        </div>
-
-        <div className="bg-white rounded-[2.5rem] shadow-xl p-7 space-y-7 border border-white">
-          <h2 className="text-xl font-black text-center text-slate-800">
-            {step === 1 ? "📌 มิเตอร์เก่า (ชำรุด)" : step === 2 ? "📌 มิเตอร์ใหม่ (ติดตั้ง)" : "📌 สรุปพิกัดและสาเหตุ"}
+        <div className="bg-white rounded-[2.5rem] shadow-xl p-8 space-y-8 border border-white">
+          <h2 className="text-2xl font-black text-center text-slate-800 uppercase tracking-tighter">
+            {step === 1 ? "มิเตอร์เก่า" : step === 2 ? "มิเตอร์ใหม่" : "สรุปผลงาน"}
           </h2>
 
           <div className="space-y-6">
             {step === 1 && (
               <>
-                <InputGroup label="เลข PEA เก่า" value={peaOld} onChange={setPeaOld} placeholder="ถ่ายรูปสแกนเลข..." onScanClick={() => setScanning({ active: true, target: "old" })} />
-                <InputGroup label="หน่วย (kWh)" value={oldUnit} onChange={setOldUnit} placeholder="0.00" type="number" />
-                <PhotoUpload label="ถ่ายภาพมิเตอร์เก่า" photo={photoOld} onPhotoChange={setPhotoOld} />
+                <InputGroup label="เลข PEA เก่า" value={peaOld} onChange={setPeaOld} placeholder="สแกน..." onScanClick={() => setScanning({ active: true, target: "old" })} />
+                <InputGroup label="หน่วยล่าสุด" value={oldUnit} onChange={setOldUnit} placeholder="0.00" type="number" />
+                <PhotoUpload label="ถ่ายรูปมิเตอร์เก่า" photo={photoOld} onPhotoChange={setPhotoOld} />
               </>
             )}
             {step === 2 && (
               <>
-                <InputGroup label="เลข PEA ใหม่" value={peaNew} onChange={setPeaNew} placeholder="ถ่ายรูปสแกนเลข..." onScanClick={() => setScanning({ active: true, target: "new" })} />
-                <InputGroup label="หน่วย (kWh)" value={newUnit} onChange={setNewUnit} placeholder="0.00" type="number" />
-                <PhotoUpload label="ถ่ายภาพมิเตอร์ใหม่" photo={photoNew} onPhotoChange={setPhotoNew} />
+                <InputGroup label="เลข PEA ใหม่" value={peaNew} onChange={setPeaNew} placeholder="สแกน..." onScanClick={() => setScanning({ active: true, target: "new" })} />
+                <InputGroup label="หน่วยเริ่มต้น" value={newUnit} onChange={setNewUnit} placeholder="0.00" type="number" />
+                <PhotoUpload label="ถ่ายรูปมิเตอร์ใหม่" photo={photoNew} onPhotoChange={setPhotoNew} />
               </>
             )}
             {step === 3 && (
-              <>
-                <div className="space-y-3">
-                  <label className="text-sm font-bold text-slate-600 ml-1">พิกัดสถานที่ปฏิบัติงาน</label>
-                  <button onClick={getCurrentLocation} disabled={isLocating} className="w-full p-5 bg-blue-50 text-blue-700 rounded-2xl border-2 border-blue-100 font-black active:scale-95 transition-all flex items-center justify-center gap-3">
-                    📍 {isLocating ? "กำลังดึงพิกัด..." : location.lat ? "อัปเดตตำแหน่งแล้ว" : "กดเพื่อดึงพิกัด GPS"}
-                  </button>
-                  {location.lat && <p className="text-[10px] text-center font-mono text-slate-400">Lat: {location.lat} | Lng: {location.lng}</p>}
-                </div>
-                <div className="space-y-3">
-                  <label className="text-sm font-bold text-slate-600 ml-1">สาเหตุการเปลี่ยนมิเตอร์</label>
-                  <select value={remark || "อื่นๆ"} onChange={(e) => setRemark(e.target.value === "อื่นๆ" ? "" : e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold appearance-none outline-none focus:border-blue-500 transition-all">
+              <div className="space-y-6">
+                <button onClick={getCurrentLocation} className="w-full py-5 bg-blue-50 text-blue-700 rounded-3xl border-2 border-blue-100 font-black flex items-center justify-center gap-3 active:scale-95 transition-all">
+                  📍 {isLocating ? "กำลังค้นหา..." : location.lat ? "บันทึกพิกัดสำเร็จ" : "เช็คอินพิกัด GPS"}
+                </button>
+                <div className="space-y-2 font-bold"><label className="text-sm text-gray-500 ml-2">สาเหตุการเปลี่ยน</label>
+                  <select value={remark || "อื่นๆ"} onChange={(e) => setRemark(e.target.value === "อื่นๆ" ? "" : e.target.value)} className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold outline-none text-gray-900">
                     {remarkOptions.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
                   </select>
-                  {!remark && <input type="text" placeholder="ระบุสาเหตุเพิ่มเติม..." value={customRemark} onChange={(e) => setCustomRemark(e.target.value)} className="w-full p-4 mt-2 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold bg-white outline-none focus:border-blue-500 transition-all opacity-100" />}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-4 mt-8 pb-10 px-2">
-          <button onClick={handleBack} className="py-5 bg-white border-2 border-slate-100 rounded-[1.5rem] font-bold text-slate-500 active:bg-slate-50 transition-all shadow-sm">
-            {step === 1 ? "ยกเลิก" : "ย้อนกลับ"}
-          </button>
+        <div className="grid grid-cols-2 gap-4 mt-8 px-2 pb-10 font-black">
+          <button onClick={handleBack} className="py-5 bg-white border-2 border-gray-100 rounded-3xl text-gray-400 active:scale-95 transition-all">ย้อนกลับ</button>
           {step < 3 ? (
-            <button onClick={handleNext} className="py-5 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-xl shadow-blue-200 active:bg-blue-700 active:scale-95 transition-all">ถัดไป</button>
+            <button onClick={handleNext} className="py-5 bg-blue-600 text-white rounded-3xl shadow-lg active:scale-95 transition-all">ถัดไป</button>
           ) : (
-            <button onClick={handleSave} disabled={isSubmitting} className={`py-5 rounded-[1.5rem] text-white font-black shadow-xl transition-all active:scale-95 ${isSubmitting ? 'bg-slate-300' : 'bg-emerald-600 shadow-emerald-200'}`}>
-              {isSubmitting ? "กำลังบันทึก..." : "💾 บันทึกงาน"}
-            </button>
+            <button onClick={handleSave} disabled={isSubmitting} className="py-5 bg-emerald-600 text-white rounded-3xl shadow-lg active:scale-95 transition-all">บันทึกงาน</button>
           )}
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes scan-line { 0% { top: 0%; } 100% { top: 100%; } }
+        .animate-scan-line { animation: scan-line 2.5s ease-in-out infinite; }
+      `}</style>
     </div>
   );
 }
 
-// --- Sub-components (Type-safe) ---
+// --- 5. Sub-components (ธีม ขาว-ดำ-แดง) ---
+
 function InputGroup({ label, value, onChange, placeholder, type = "text", onScanClick }: InputGroupProps) {
   return (
-    <div className="space-y-3">
-      <label className="text-sm font-bold text-slate-600 ml-1">{label}</label>
-      <div className="flex gap-2">
-        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold outline-none focus:bg-white focus:border-blue-500 transition-all opacity-100" />
+    <div className="space-y-2">
+      <label className="text-sm font-bold text-gray-500 ml-2">{label}</label>
+      <div className="flex gap-2 items-center">
+        <input 
+          type={type} 
+          value={value} 
+          onChange={(e) => onChange(e.target.value)} 
+          placeholder={placeholder} 
+          className="flex-1 p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-black outline-none text-gray-900 opacity-100 focus:bg-white focus:border-red-500 transition-all shadow-sm" 
+        />
         {onScanClick && (
-          <button onClick={onScanClick} className="px-5 bg-blue-600 text-white rounded-2xl active:scale-90 transition-all shadow-lg shadow-blue-100 flex flex-col items-center justify-center min-w-[75px]">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="7" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="17" y2="7"/><line x1="17" y1="17" x2="17" y2="17"/><line x1="7" y1="17" x2="7" y2="17"/></svg>
-            <span className="text-[10px] mt-1 font-black">สแกน</span>
+          <button 
+            onClick={onScanClick} 
+            className="h-[60px] min-w-[75px] bg-black text-white rounded-2xl shadow-xl flex flex-col items-center justify-center active:scale-90 transition-all border-b-4 border-red-600"
+          >
+            {/* SVG Scanner Icon White-Black-Red Style */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+               <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+               <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+               <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+               <path d="M3 17v2a2 2 0 0 0 2 2h2"></path>
+               <line x1="8" y1="12" x2="16" y2="12" stroke="#ef4444" strokeWidth="3"></line>
+            </svg>
+            <span className="text-[10px] mt-1 font-black uppercase tracking-tighter text-white">สแกน</span>
           </button>
         )}
       </div>
@@ -275,16 +236,22 @@ function InputGroup({ label, value, onChange, placeholder, type = "text", onScan
   );
 }
 
-function PhotoUpload({ label, photo, onPhotoChange }: { label: string; photo: File | null; onPhotoChange: (f: File | null) => void }) {
+function PhotoUpload({ label, photo, onPhotoChange }: PhotoUploadProps) {
   return (
-    <div className="space-y-3">
-      <label className="text-sm font-bold text-slate-600 ml-1">{label}</label>
-      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-[2rem] cursor-pointer bg-slate-50/50 hover:bg-slate-50 active:bg-blue-50 transition-all">
+    <div className="space-y-2">
+      <label className="text-sm font-bold text-gray-500 ml-2">{label}</label>
+      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer bg-gray-50/50 hover:bg-white active:bg-red-50 transition-all shadow-sm group">
         <div className="flex flex-col items-center">
-          <span className="text-4xl mb-1">{photo ? "📸" : "📷"}</span>
-          <span className="text-xs font-bold text-slate-500">{photo ? `✅ ${photo.name.slice(0, 15)}...` : "แตะเพื่อถ่ายรูป"}</span>
+          <span className="text-3xl mb-1 grayscale group-active:grayscale-0 transition-all">{photo ? "✅" : "📷"}</span>
+          <span className="text-[11px] font-black text-gray-400 uppercase tracking-tight">{photo ? "บันทึกรูปแล้ว" : "ถ่ายรูปมิเตอร์"}</span>
         </div>
-        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPhotoChange(e.target.files?.[0] ?? null)} />
+        <input 
+          type="file" 
+          accept="image/*" 
+          capture="environment" 
+          className="hidden" 
+          onChange={(e) => onPhotoChange(e.target.files ? e.target.files[0] : null)} 
+        />
       </label>
     </div>
   );

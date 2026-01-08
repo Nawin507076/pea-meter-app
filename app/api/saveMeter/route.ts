@@ -71,9 +71,11 @@ export async function POST(req: NextRequest) {
         payload.timestamp ?? "",
       ],
     ];
-
+    // เพิ่มบรรทัดนี้ก่อน append
+console.log("Using ID:", sheetId);
+console.log("Service Account Email:", serviceAccount.client_email);
     await sheets.spreadsheets.values.append({
-      spreadsheetId: sheetId,
+      spreadsheetId: sheetId.trim(), // เพิ่ม .trim() เพื่อป้องกันช่องว่างที่แฝงมา,
       range: "A1",
       valueInputOption: "USER_ENTERED",
       requestBody: { values },

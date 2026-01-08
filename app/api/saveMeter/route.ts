@@ -43,6 +43,16 @@ export async function POST(req: NextRequest) {
 
     const sheets = google.sheets({ version: "v4", auth });
 
+
+await sheets.spreadsheets.values.append({
+  spreadsheetId: process.env.GOOGLE_SHEET_ID!,
+  range: "A1",
+  valueInputOption: "USER_ENTERED",
+  requestBody: {
+    values: [["TEST", new Date().toISOString()]],
+  },
+});
+
     // สร้าง row สำหรับ Google Sheet
     const values = [
       [
@@ -63,7 +73,7 @@ export async function POST(req: NextRequest) {
     // Append ข้อมูลลง Sheet
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID!,
-      range: "Sheet1!A1",
+      range: "A1",
       valueInputOption: "USER_ENTERED",
       requestBody: { values },
     });

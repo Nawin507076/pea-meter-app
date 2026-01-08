@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/library";
 
-// --- 1. Interfaces ---
+// --- Types ---
 type WorkerInfo = { worker: string; jobType: "incident" | "service" };
 
 interface InputGroupProps {
@@ -26,7 +26,7 @@ export default function MultiStepMeterForm() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // --- 2. State Initializer (แก้ปัญหา Cascading Renders) ---
+  // State Initializer: แก้ปัญหา Cascading Renders และ Redirect หากไม่มีข้อมูล
   const [workerInfo] = useState<WorkerInfo | null>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("worker_info");
@@ -59,35 +59,35 @@ export default function MultiStepMeterForm() {
     if (!workerInfo) { router.push("/"); }
   }, [workerInfo, router]);
 
-  // --- 3. ⚡ สุดยอดระบบสแกนความแม่นยำสูง (ZXing High-Res) ---
+  // --- ⚡ ระบบสแกนแม่นยำสูง (Full HD + Try Harder) ---
   useEffect(() => {
     let codeReader: BrowserMultiFormatReader | null = null;
 
     if (scanning.active && videoRef.current) {
       const hints = new Map();
-      // ระบุ Format ให้ชัดเจนเพื่อความเร็วและความแม่นยำ
+      // ระบุ Format บาร์โค้ดมิเตอร์ (Code 128) ให้ชัดเจนเพื่อให้สแกนไวขึ้น
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.QR_CODE]);
-      hints.set(DecodeHintType.TRY_HARDER, true); // สแกนละเอียดทุกเฟรมภาพ
+      hints.set(DecodeHintType.TRY_HARDER, true);
 
       codeReader = new BrowserMultiFormatReader(hints);
       
-      // บังคับความละเอียดสูงเพื่อให้เส้นบาร์โค้ดชัดเจน
+      // ตั้งค่าดึงประสิทธิภาพกล้องมือถือสูงสุด
       const constraints: MediaStreamConstraints = {
         video: { 
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          facingMode: "environment", // บังคับใช้กล้องหลัง
+          width: { ideal: 1920 },    // ดึงความละเอียด Full HD
+          height: { ideal: 1080 }
         }
       };
 
       codeReader.decodeFromConstraints(constraints, videoRef.current, (result) => {
         if (result) {
-          const text = result.getText().replace(/[^0-9]/g, ""); // กรองเอาเฉพาะเลข
+          const text = result.getText().replace(/[^0-9]/g, ""); // กรองเหลือแค่เลข
           
           if (scanning.target === "old") setPeaOld(text);
           else setPeaNew(text);
 
-          if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // สั่นเมื่อเจอ
+          if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // สั่นแจ้งเตือนสำเร็จ
           setScanning(prev => ({ ...prev, active: false }));
         }
       });
@@ -96,7 +96,6 @@ export default function MultiStepMeterForm() {
     return () => { if (codeReader) codeReader.reset(); };
   }, [scanning.active, scanning.target]);
 
-  // --- 4. Handlers ---
   const getCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) return alert("ไม่รองรับ GPS");
     setIsLocating(true);
@@ -116,6 +115,7 @@ export default function MultiStepMeterForm() {
   const handleSave = async () => {
     if (!workerInfo || isSubmitting) return;
     setIsSubmitting(true);
+    // ใส่ Logic การส่ง API หรือ FormData ของคุณตรงนี้
     setTimeout(() => {
       alert("บันทึกเรียบร้อย ✅");
       router.push("/");
@@ -128,25 +128,37 @@ export default function MultiStepMeterForm() {
   return (
     <div className="min-h-screen bg-gray-50 pb-10 font-sans text-gray-900">
       
-      {/* 🔴 High-Precision Scanner UI */}
+      {/* 🟢 Scanner Interface (สแกนแนวราบเหมือน AppSheet) */}
       {scanning.active && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center">
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden">
           <div className="relative w-full h-[70vh]">
             <video ref={videoRef} className="w-full h-full object-cover" playsInline />
+            
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              {/* กรอบสแกนบาร์โค้ดแนวนอน (Barcode Focus) */}
-              <div className="w-[85%] h-36 border-2 border-white/30 rounded-3xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
-                {/* Laser Line */}
-                <div className="absolute top-0 left-0 w-full h-[3px] bg-red-600 shadow-[0_0_20px_#dc2626] animate-scan-line"></div>
-                {/* Corner Accents */}
-                <div className="absolute -top-1 -left-1 w-10 h-10 border-t-8 border-l-8 border-white rounded-tl-2xl"></div>
-                <div className="absolute -top-1 -right-1 w-10 h-10 border-t-8 border-r-8 border-white rounded-tr-2xl"></div>
-                <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-8 border-l-8 border-white rounded-bl-2xl"></div>
-                <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-8 border-r-8 border-white rounded-br-2xl"></div>
+              <div className="w-[90%] h-40 border-2 border-white/20 rounded-3xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
+                {/* Red Laser Line */}
+                <div className="absolute top-0 left-0 w-full h-[4px] bg-red-600 shadow-[0_0_20px_#dc2626] animate-scan-line"></div>
+                {/* corners */}
+                <div className="absolute -top-1 -left-1 w-12 h-12 border-t-8 border-l-8 border-white rounded-tl-2xl"></div>
+                <div className="absolute -top-1 -right-1 w-12 h-12 border-t-8 border-r-8 border-white rounded-tr-2xl"></div>
+                <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-8 border-l-8 border-white rounded-bl-2xl"></div>
+                <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-8 border-r-8 border-white rounded-br-2xl"></div>
               </div>
             </div>
+            
+            <div className="absolute bottom-10 w-full text-center px-10">
+              <p className="text-white text-xs font-black bg-black/50 py-3 rounded-2xl backdrop-blur-sm border border-white/20 uppercase tracking-widest">
+                ถือมือถือแนวนอนเพื่อการสแกนที่แม่นยำขึ้น
+              </p>
+            </div>
           </div>
-          <button onClick={() => setScanning(p => ({ ...p, active: false }))} className="mt-8 px-16 py-5 bg-white text-black font-black rounded-3xl active:scale-95 transition-all">ยกเลิก</button>
+          
+          <button 
+            onClick={() => setScanning(p => ({ ...p, active: false }))} 
+            className="mt-8 px-16 py-5 bg-white text-black font-black rounded-3xl shadow-2xl active:scale-95 transition-all"
+          >
+            ปิดสแกนเนอร์
+          </button>
         </div>
       )}
 
@@ -180,10 +192,10 @@ export default function MultiStepMeterForm() {
             {step === 3 && (
               <div className="space-y-6">
                 <button onClick={getCurrentLocation} className="w-full py-5 bg-blue-50 text-blue-700 rounded-3xl border-2 border-blue-100 font-black flex items-center justify-center gap-3 active:scale-95 transition-all shadow-sm">
-                   📍 {isLocating ? "กำลังดึงพิกัด..." : location.lat ? "เช็คอิน GPS แล้ว" : "กดเช็คอินพิกัด GPS"}
+                   📍 {isLocating ? "กำลังดึงพิกัด..." : location.lat ? "เช็คอินพิกัดสำเร็จ" : "กดเช็คอินพิกัด GPS"}
                 </button>
-                <div className="space-y-2"><label className="text-xs font-black text-gray-400 uppercase ml-2">สาเหตุการเปลี่ยน</label>
-                  <select value={remark || "อื่นๆ"} onChange={(e) => setRemark(e.target.value === "อื่นๆ" ? "" : e.target.value)} className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-900 outline-none appearance-none">
+                <div className="space-y-2"><label className="text-xs font-black text-gray-400 uppercase ml-2 tracking-widest">สาเหตุการเปลี่ยน</label>
+                  <select value={remark || "อื่นๆ"} onChange={(e) => setRemark(e.target.value === "อื่นๆ" ? "" : e.target.value)} className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-900 outline-none shadow-inner">
                     {remarkOptions.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
                   </select>
                 </div>
@@ -192,9 +204,9 @@ export default function MultiStepMeterForm() {
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Buttons */}
         <div className="grid grid-cols-2 gap-4 mt-8 px-2 pb-10">
-          <button onClick={handleBack} className="py-5 bg-white border-2 border-gray-100 rounded-3xl font-black text-gray-400 active:scale-95">ย้อนกลับ</button>
+          <button onClick={handleBack} className="py-5 bg-white border-2 border-gray-100 rounded-3xl font-black text-gray-400 active:scale-95 transition-all shadow-sm">ย้อนกลับ</button>
           {step < 3 ? (
             <button onClick={handleNext} className="py-5 bg-blue-600 text-white rounded-3xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-all">ถัดไป</button>
           ) : (
@@ -211,7 +223,7 @@ export default function MultiStepMeterForm() {
   );
 }
 
-// --- 5. Sub-components (ธีม ขาว-ดำ-แดง) ---
+// --- Sub-components (Strict Types) ---
 
 function InputGroup({ label, value, onChange, placeholder, type = "text", onScanClick }: InputGroupProps) {
   return (

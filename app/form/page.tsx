@@ -26,7 +26,6 @@ export default function MultiStepMeterForm() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // โหลดข้อมูลเจ้าหน้าที่จาก LocalStorage
   const [workerInfo] = useState<WorkerInfo | null>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("worker_info");
@@ -35,7 +34,6 @@ export default function MultiStepMeterForm() {
     return null;
   });
 
-  // --- Form States ---
   const [peaOld, setPeaOld] = useState("");
   const [oldUnit, setOldUnit] = useState("");
   const [photoOld, setPhotoOld] = useState<File | null>(null);
@@ -60,7 +58,6 @@ export default function MultiStepMeterForm() {
     if (!workerInfo) { router.push("/"); }
   }, [workerInfo, router]);
 
-  // --- Scanning Logic ---
   useEffect(() => {
     let codeReader: BrowserMultiFormatReader | null = null;
     if (scanning.active && videoRef.current) {
@@ -100,22 +97,61 @@ export default function MultiStepMeterForm() {
     window.scrollTo(0, 0);
   };
 
+  // --- 🛠️ ส่วนที่แก้ไข: ฟังก์ชันบันทึกข้อมูลยิงเข้า API ---
   const handleSave = async () => {
     if (!workerInfo || isSubmitting) return;
+    
+    // ตรวจสอบข้อมูลเบื้องต้น
+    if (!peaOld || !peaNew) {
+      alert("⚠️ กรุณาสแกนหรือระบุเลข PEA ให้ครบถ้วน");
+      return;
+    }
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      alert("บันทึกข้อมูลเรียบร้อย ✅");
-      router.push("/");
+
+    try {
+      const formData = new FormData();
+      formData.append("worker", workerInfo.worker);
+      formData.append("jobType", workerInfo.jobType);
+      formData.append("peaOld", peaOld);
+      formData.append("oldUnit", oldUnit);
+      formData.append("peaNew", peaNew);
+      formData.append("newUnit", newUnit);
+      formData.append("remark", remark || customRemark);
+      formData.append("lat", location.lat);
+      formData.append("lng", location.lng);
+      formData.append("timestamp", new Date().toLocaleString("th-TH"));
+
+      // แนบไฟล์ภาพถ้ามีการถ่ายไว้
+      if (photoOld) formData.append("photoOld", photoOld);
+      if (photoNew) formData.append("photoNew", photoNew);
+
+      const res = await fetch("/api/saveMeter", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        alert("บันทึกข้อมูลเรียบร้อย ✅ ข้อมูลถูกส่งเข้า Google Sheets แล้ว");
+        localStorage.removeItem("worker_info"); // ล้างค่าเมื่อเสร็จงาน
+        router.push("/");
+      } else {
+        const err = await res.json();
+        throw new Error(err.error || "บันทึกไม่สำเร็จ");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("❌ เกิดข้อผิดพลาด: ไม่สามารถส่งข้อมูลได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
   if (!workerInfo) return null;
 
   return (
     <div className="min-h-screen bg-gray-100 pb-10 font-sans text-gray-900 overflow-x-hidden">
-      
-      {/* 🔴 Scanner UI */}
+      {/* UI สแกนเนอร์ และฟอร์มยังคงเหมือนเดิมที่คุณส่งมา... */}
       {scanning.active && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden">
           <div className="relative w-full h-[70vh]">
@@ -123,7 +159,6 @@ export default function MultiStepMeterForm() {
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-4">
               <div className="w-full max-w-sm h-40 border-4 border-white/30 rounded-3xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.7)]">
                 <div className="absolute top-0 left-0 w-full h-[5px] bg-red-600 shadow-[0_0_20px_#dc2626] animate-scan-line"></div>
-                {/* corners */}
                 <div className="absolute -top-1 -left-1 w-10 h-10 border-t-8 border-l-8 border-white rounded-tl-xl"></div>
                 <div className="absolute -top-1 -right-1 w-10 h-10 border-t-8 border-r-8 border-white rounded-tr-xl"></div>
                 <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-8 border-l-8 border-white rounded-bl-xl"></div>
@@ -137,7 +172,6 @@ export default function MultiStepMeterForm() {
         </div>
       )}
 
-      {/* 🟢 Header: แก้ปัญหาข้อความยาวเกิน */}
       <div className="bg-white border-b-2 border-gray-200 sticky top-0 z-10 shadow-md p-4 px-5 flex justify-between items-center w-full">
         <div className="flex flex-col min-w-0 flex-1">
           <span className="text-gray-500 text-[10px] font-black uppercase tracking-tighter truncate">เจ้าหน้าที่</span>
@@ -152,7 +186,6 @@ export default function MultiStepMeterForm() {
       </div>
 
       <div className="max-w-md mx-auto px-4 mt-6">
-        {/* Step Card */}
         <div className="bg-white rounded-[2.5rem] shadow-2xl p-6 space-y-8 border border-white">
           <h2 className="text-2xl font-black text-center text-slate-800 tracking-tighter bg-slate-50 py-3 rounded-2xl">
             {step === 1 ? "📌 ข้อมูลมิเตอร์เก่า" : step === 2 ? "📌 ข้อมูลมิเตอร์ใหม่" : "📌 พิกัดปฏิบัติงาน"}
@@ -192,7 +225,6 @@ export default function MultiStepMeterForm() {
           </div>
         </div>
 
-        {/* Footer Buttons */}
         <div className="grid grid-cols-2 gap-4 mt-8 px-1 pb-10">
           <button onClick={handleBack} className="py-6 bg-white border-4 border-gray-100 rounded-[2.2rem] text-xl font-black text-gray-400 active:scale-95 transition-all shadow-md">
             ย้อนกลับ
@@ -217,51 +249,49 @@ export default function MultiStepMeterForm() {
   );
 }
 
-// --- Sub-components (ป้องกัน Layout เกินขอบ) ---
-
+// --- Sub-components (InputGroup & PhotoUpload คงเดิมตามที่คุณส่งมา) ---
 function InputGroup({ label, value, onChange, placeholder, type = "text", onScanClick }: InputGroupProps) {
-  return (
-    <div className="space-y-2 w-full">
-      <label className="text-lg font-black text-slate-600 ml-3 block tracking-tight">{label}</label>
-      <div className="flex gap-2 items-stretch w-full">
-        {/* min-w-0 คือคีย์หลักที่ทำให้ช่อง Input หดตัวได้ไม่ล้นขอบ */}
-        <input 
-          type={type} value={value} onChange={(e) => onChange(e.target.value)} 
-          placeholder={placeholder} 
-          className="flex-1 min-w-0 p-5 bg-slate-50 border-4 border-slate-100 rounded-[1.8rem] font-black text-xl text-slate-800 outline-none focus:bg-white focus:border-red-500 transition-all shadow-inner placeholder:text-slate-300" 
-        />
-        {onScanClick && (
-          <button 
-            onClick={onScanClick} 
-            className="w-[85px] flex-shrink-0 bg-black text-white rounded-[1.8rem] shadow-xl flex flex-col items-center justify-center active:scale-90 transition-all border-b-8 border-red-600"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-               <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 17v2a2 2 0 0 0 2 2h2"/><line x1="8" y1="12" x2="16" y2="12" stroke="#ef4444" strokeWidth="4"></line>
-            </svg>
-            <span className="text-[10px] mt-1 font-black uppercase text-white">สแกน</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PhotoUpload({ label, photo, onPhotoChange }: PhotoUploadProps) {
-  return (
-    <div className="space-y-2 w-full">
-      <label className="text-lg font-black text-slate-600 ml-3 block tracking-tight">{label}</label>
-      <label className="flex flex-col items-center justify-center w-full h-36 border-4 border-dashed border-slate-200 rounded-[2.5rem] cursor-pointer bg-slate-50 hover:bg-white active:bg-blue-50 transition-all shadow-sm">
-        <div className="flex flex-col items-center text-center px-4">
-          <span className="text-5xl mb-1">{photo ? "✅" : "📸"}</span>
-          <span className="text-sm font-black text-slate-400 uppercase tracking-tight truncate max-w-full">
-            {photo ? "บันทึกรูปแล้ว" : "ถ่ายรูปมิเตอร์"}
-          </span>
+    return (
+      <div className="space-y-2 w-full">
+        <label className="text-lg font-black text-slate-600 ml-3 block tracking-tight">{label}</label>
+        <div className="flex gap-2 items-stretch w-full">
+          <input 
+            type={type} value={value} onChange={(e) => onChange(e.target.value)} 
+            placeholder={placeholder} 
+            className="flex-1 min-w-0 p-5 bg-slate-50 border-4 border-slate-100 rounded-[1.8rem] font-black text-xl text-slate-800 outline-none focus:bg-white focus:border-red-500 transition-all shadow-inner placeholder:text-slate-300" 
+          />
+          {onScanClick && (
+            <button 
+              onClick={onScanClick} 
+              className="w-[85px] flex-shrink-0 bg-black text-white rounded-[1.8rem] shadow-xl flex flex-col items-center justify-center active:scale-90 transition-all border-b-8 border-red-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                 <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 17v2a2 2 0 0 0 2 2h2"/><line x1="8" y1="12" x2="16" y2="12" stroke="#ef4444" strokeWidth="4"></line>
+              </svg>
+              <span className="text-[10px] mt-1 font-black uppercase text-white">สแกน</span>
+            </button>
+          )}
         </div>
-        <input 
-          type="file" accept="image/*" capture="environment" className="hidden" 
-          onChange={(e) => onPhotoChange(e.target.files ? e.target.files[0] : null)} 
-        />
-      </label>
-    </div>
-  );
-}
+      </div>
+    );
+  }
+  
+  function PhotoUpload({ label, photo, onPhotoChange }: PhotoUploadProps) {
+    return (
+      <div className="space-y-2 w-full">
+        <label className="text-lg font-black text-slate-600 ml-3 block tracking-tight">{label}</label>
+        <label className="flex flex-col items-center justify-center w-full h-36 border-4 border-dashed border-slate-200 rounded-[2.5rem] cursor-pointer bg-slate-50 hover:bg-white active:bg-blue-50 transition-all shadow-sm">
+          <div className="flex flex-col items-center text-center px-4">
+            <span className="text-5xl mb-1">{photo ? "✅" : "📸"}</span>
+            <span className="text-sm font-black text-slate-400 uppercase tracking-tight truncate max-w-full">
+              {photo ? "บันทึกรูปแล้ว" : "ถ่ายรูปมิเตอร์"}
+            </span>
+          </div>
+          <input 
+            type="file" accept="image/*" capture="environment" className="hidden" 
+            onChange={(e) => onPhotoChange(e.target.files ? e.target.files[0] : null)} 
+          />
+        </label>
+      </div>
+    );
+  }

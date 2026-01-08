@@ -69,7 +69,9 @@ await sheets.spreadsheets.values.append({
     ];
     console.log("SERVICE ACCOUNT KEY:", process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.slice(0,50));
     console.log("SHEET ID:", process.env.GOOGLE_SHEET_ID);
-
+await sheets.spreadsheets.get({
+  spreadsheetId: process.env.GOOGLE_SHEET_ID!,
+});
     // Append ข้อมูลลง Sheet
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID!,

@@ -9,7 +9,7 @@ export default function DispatchPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       router.push("/form");
-    }, 5000); // 5 วินาที animation
+    }, 6000); // 5 วินาที animation
 
     return () => clearTimeout(timer);
   }, [router]);
@@ -53,7 +53,7 @@ export default function DispatchPage() {
           to { transform: translateX(120vw); }
         }
         .animate-drive {
-          animation: drive 6s ease-in-out forwards;
+          animation: drive 7s ease-in-out forwards;
         }
       `}</style>
     </div>

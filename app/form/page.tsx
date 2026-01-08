@@ -65,7 +65,7 @@ export default function MultiStepMeterForm() {
 
   const remarkOptions: string[] = ["ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "ใช้ไฟเกิน(ct ไหม้)", "อื่นๆ"];
 
-  // --- 2. ฟังก์ชันบีบอัดรูปภาพ (คงไว้เพื่อแก้ปัญหามือถือส่งไม่ได้) ---
+  // --- 2. ฟังก์ชันบีบอัดรูปภาพ ---
   const compressImage = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -185,11 +185,46 @@ export default function MultiStepMeterForm() {
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-10 font-sans overflow-x-hidden">
       
-      {/* Scanner UI */}
+      {/* 🔴 Scanner UI: ปรับเส้นแดงใหญ่ และมีเส้นเล็กตรงกลาง */}
       {scanning.active && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden">
-          <video ref={videoRef} className="w-full h-full object-cover" playsInline />
-          <button onClick={() => setScanning(p => ({ ...p, active: false }))} className="absolute bottom-10 px-16 py-5 bg-white text-black text-2xl font-black rounded-3xl">ยกเลิก</button>
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden font-sans">
+          <div className="relative w-full h-full">
+            <video ref={videoRef} className="w-full h-full object-cover" playsInline />
+            
+            {/* Overlay Layer */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              
+              {/* กรอบเล็งขนาดใหญ่ */}
+              <div className="relative w-72 h-48 border-2 border-white/30 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] flex items-center justify-center">
+                
+                {/* มุมกรอบสีขาวหนา */}
+                <div className="absolute -top-1 -left-1 w-10 h-10 border-t-8 border-l-8 border-white rounded-tl-2xl"></div>
+                <div className="absolute -top-1 -right-1 w-10 h-10 border-t-8 border-r-8 border-white rounded-tr-2xl"></div>
+                <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-8 border-l-8 border-white rounded-bl-2xl"></div>
+                <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-8 border-r-8 border-white rounded-br-2xl"></div>
+
+                {/* ⚡ เส้นเลเซอร์สีแดงใหญ่ (Animation) */}
+                <div className="absolute left-0 w-full h-1 bg-red-600 shadow-[0_0_15px_#dc2626] animate-scan-line-long"></div>
+
+                {/* ⚡ เส้นเล็กตรงกลาง (จุดเล็งถาวร) */}
+                <div className="w-[90%] h-[1px] bg-red-500/80 shadow-[0_0_5px_#ef4444]"></div>
+              </div>
+
+              <p className="mt-10 text-white font-black text-xl tracking-widest drop-shadow-lg">
+                วางบาร์โค้ดในกรอบ
+              </p>
+            </div>
+
+            {/* ปุ่มยกเลิก */}
+            <div className="absolute bottom-10 w-full px-10">
+              <button 
+                onClick={() => setScanning(p => ({ ...p, active: false }))} 
+                className="w-full py-5 bg-white/10 backdrop-blur-md border-2 border-white/30 text-white text-2xl font-black rounded-3xl active:scale-95 transition-all"
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -221,7 +256,6 @@ export default function MultiStepMeterForm() {
 
         {/* Main Card */}
         <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 p-8 space-y-10 border border-slate-50 relative overflow-hidden">
-          {/* แถบสีด้านบนการ์ดแบ่งตามขั้นตอน */}
           <div className="absolute top-0 left-0 w-full h-2 bg-slate-50">
              <div 
                 className="h-full bg-blue-600 transition-all duration-500 ease-out" 
@@ -269,7 +303,6 @@ export default function MultiStepMeterForm() {
           </div>
         </div>
 
-        {/* Footer Buttons */}
         <div className="grid grid-cols-2 gap-5 mt-10 px-1 pb-12">
           <button onClick={handleBack} className="py-6 bg-white border border-slate-100 rounded-[2rem] text-xl font-bold text-slate-400 shadow-sm active:scale-95 transition-all">
             ย้อนกลับ
@@ -285,11 +318,22 @@ export default function MultiStepMeterForm() {
           )}
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes scan-line-long {
+          0% { top: 0%; }
+          50% { top: 100%; }
+          100% { top: 0%; }
+        }
+        .animate-scan-line-long {
+          position: absolute;
+          animation: scan-line-long 2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
 
-// --- Sub-components (Input Style คงเดิมตามภาพ) ---
 function InputGroup({ label, value, onChange, placeholder, type = "text", onScanClick }: InputGroupProps) {
   return (
     <div className="space-y-3 w-full">

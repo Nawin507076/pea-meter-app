@@ -15,7 +15,7 @@ export default function AddInventory() {
 
   // ฟังก์ชันเพิ่มเลข (ใช้ทั้งพิมพ์มือ และ สแกน)
   const addPea = (code: string) => {
-    if (!code.trim()) return; // ถ้าว่างไม่ต้องเพิ่ม
+    if (!code.trim()) return;
     if (peaList.length >= 10) {
       alert("บันทึกได้สูงสุดครั้งละ 10 เครื่องครับ");
       setIsScanning(false);
@@ -31,7 +31,7 @@ export default function AddInventory() {
         if (navigator.vibrate) navigator.vibrate(100);
       }
     }
-    setCurrentInput(""); // ล้างช่องพิมพ์หลังเพิ่มสำเร็จ
+    setCurrentInput("");
   };
 
   // ระบบสแกนเนอร์
@@ -78,9 +78,11 @@ export default function AddInventory() {
         <div className="bg-white p-6 rounded-[2rem] shadow-xl space-y-4">
           <label className="block text-sm font-bold text-slate-500 ml-2">ชื่อพนักงานที่เบิก</label>
           <input 
-            value={staffName} onChange={(e) => setStaffName(e.target.value)}
+            value={staffName} 
+            onChange={(e) => setStaffName(e.target.value)}
             placeholder="ระบุชื่อผู้เบิก..."
-            className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
+            // ✅ แก้ไข: เพิ่ม text-black และ appearance-none เพื่อให้มือถือไม่ปรับสีเอง
+            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-black placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white appearance-none"
           />
         </div>
 
@@ -99,7 +101,8 @@ export default function AddInventory() {
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPea(currentInput); } }}
                 placeholder="พิมพ์เลขมิเตอร์..."
                 type="number"
-                className="flex-1 p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white"
+                // ✅ แก้ไข: บังคับ text-black และใส่ appearance-none กันสีจางใน iPhone/Android
+                className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-black placeholder-slate-400 outline-none focus:bg-white appearance-none"
               />
               <button 
                 onClick={() => addPea(currentInput)}
@@ -109,7 +112,7 @@ export default function AddInventory() {
               </button>
             </div>
 
-            {/* ปุ่มสแกน (แยกออกมาให้กดง่ายๆ) */}
+            {/* ปุ่มสแกน */}
             <button 
               onClick={() => setIsScanning(true)} 
               disabled={peaList.length >= 10}
@@ -123,7 +126,7 @@ export default function AddInventory() {
           <div className="mt-4 space-y-2 max-h-64 overflow-y-auto pt-2 border-t border-slate-50">
             {peaList.length === 0 && <p className="text-center text-slate-300 py-4 text-sm font-bold italic">ยังไม่มีรายการที่เพิ่ม</p>}
             {peaList.map((pea, index) => (
-              <div key={index} className="flex justify-between items-center p-4 bg-blue-50 text-blue-700 rounded-2xl font-bold animate-in slide-in-from-right-5">
+              <div key={index} className="flex justify-between items-center p-4 bg-blue-50 text-blue-700 rounded-2xl font-bold">
                 <span>{index + 1}. {pea}</span>
                 <button onClick={() => setPeaList(peaList.filter((_, i) => i !== index))} className="w-8 h-8 flex items-center justify-center bg-white text-red-500 rounded-full shadow-sm">✕</button>
               </div>
@@ -131,7 +134,7 @@ export default function AddInventory() {
           </div>
         </div>
 
-        {/* ปุ่มบันทึกส่งไป Google Sheet */}
+        {/* ปุ่มบันทึก */}
         <button 
           onClick={handleSubmit} 
           disabled={isSubmitting || peaList.length === 0}
@@ -141,7 +144,7 @@ export default function AddInventory() {
         </button>
       </div>
 
-      {/* 🔴 Scanner UI (เส้นแดงเหมือนเดิม) */}
+      {/* 🔴 Scanner UI */}
       {isScanning && (
         <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center overflow-hidden">
           <div className="relative w-full h-full">

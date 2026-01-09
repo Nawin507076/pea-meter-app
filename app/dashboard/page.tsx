@@ -104,7 +104,7 @@ export default function InventoryDashboard() {
               viewMode === "remaining" ? "bg-blue-600 text-white border-blue-200 scale-105" : "bg-white text-blue-600 border-white"
             }`}
           >
-            <span className="text-[10px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">คงเหลือ (No)</span>
+            <span className="text-[10px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">คงเหลือ แผนกแก้ไฟ</span>
             <div className="text-5xl font-black text-center">{data?.remainingCount || 0}</div>
           </button>
 
@@ -114,7 +114,7 @@ export default function InventoryDashboard() {
               viewMode === "installed" ? "bg-emerald-600 text-white border-emerald-200 scale-105" : "bg-white text-emerald-600 border-white"
             }`}
           >
-            <span className="text-[10px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">ติดแล้ว (Yes)</span>
+            <span className="text-[10px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">แผนกแก้ไฟ ติดแล้ว</span>
             <div className="text-5xl font-black text-center">{data?.installedCount || 0}</div>
           </button>
         </div>
@@ -123,7 +123,7 @@ export default function InventoryDashboard() {
         {viewMode !== "none" && (
           <div className="space-y-4">
             <h3 className="text-xl font-black text-slate-800 ml-2">
-              {viewMode === "remaining" ? "📦 รายการในคลัง" : "📜 ประวัติงานสับเปลี่ยน"}
+              {viewMode === "remaining" ? "📦 รายการในคลังแก้ไฟ" : "📜 ประวัติงานสับเปลี่ยน"}
             </h3>
 
             <div className="space-y-4">

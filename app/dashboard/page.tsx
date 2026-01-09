@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 // --- 1. กำหนด Interfaces ---
@@ -124,6 +125,12 @@ export default function InventoryDashboard() {
       <div className="max-w-md mx-auto space-y-6 mt-6">
         
         <header className="text-center space-y-2">
+                {/* 📊 ปุ่มไปหน้า Dashboard (วางไว้นอก Card หรือบนสุดของ Card) */}
+      <div className="w-full max-w-md mb-4 flex justify-end">
+        <Link href="/inventory/history" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-blue-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
+           ดูยอดที่สับเปลี่ยนในระบบแล้ว
+        </Link>
+      </div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tight italic">📊 DASHBOARD</h1>
           <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">ระบบบริหารจัดการคลังมิเตอร์</p>
         </header>

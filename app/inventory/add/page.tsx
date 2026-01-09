@@ -13,6 +13,9 @@ export default function AddInventory() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // 🔐 ตั้งรหัสผ่านที่นี่
+  const ADMIN_PASSWORD = "1234";
+
   // ฟังก์ชันเพิ่มเลข (ใช้ทั้งพิมพ์มือ และ สแกน)
   const addPea = (code: string) => {
     if (!code.trim()) return;
@@ -51,6 +54,14 @@ export default function AddInventory() {
 
   const handleSubmit = async () => {
     if (!staffName || peaList.length === 0) return alert("กรุณาระบุชื่อคนเบิกและระบุมิเตอร์อย่างน้อย 1 เครื่อง");
+    // 🛡️ ระบบเช็ครหัสผ่านก่อนบันทึก
+    const password = window.prompt("กรุณาใส่รหัสผ่านเจ้าหน้าที่คลังเพื่อบันทึกข้อมูล:");
+    
+    if (password === null) return; // กดยกเลิก
+    if (password !== ADMIN_PASSWORD) {
+      alert("❌ รหัสผ่านไม่ถูกต้อง! เฉพาะเจ้าหน้าที่คลังเท่านั้นที่สามารถบันทึกได้");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/inventory", {
@@ -60,7 +71,7 @@ export default function AddInventory() {
       });
       if (res.ok) {
         alert("บันทึกรายการเบิกสำเร็จ ✅");
-        router.push("/");
+        router.push("/dashboard");
       }
     } catch (err) {
       alert("เกิดข้อผิดพลาด");

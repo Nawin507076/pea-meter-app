@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function Home() {
   const [worker, setWorker] = useState("");
@@ -34,8 +35,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center px-4 pt-10 font-sans overflow-x-hidden">
+
       <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl shadow-slate-200/60 p-8 space-y-10 border border-slate-100 h-fit">
-        
+              {/* 📊 ปุ่มไปหน้า Dashboard (วางไว้นอก Card หรือบนสุดของ Card) */}
+      <div className="w-full max-w-md mb-4 flex justify-end">
+        <Link href="/dashboard" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-blue-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
+          📊 ดูยอดสต็อกคงเหลือ
+        </Link>
+      </div>
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="inline-block p-4 bg-blue-50 rounded-3xl mb-2 shadow-sm">

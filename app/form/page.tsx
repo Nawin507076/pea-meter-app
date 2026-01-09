@@ -120,16 +120,39 @@ export default function MultiStepMeterForm() {
     return () => { if (codeReader) codeReader.reset(); };
   }, [scanning.active, scanning.target]);
 
-  const getCurrentLocation = useCallback(() => {
+const getCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) return alert("ไม่รองรับ GPS");
+    
     setIsLocating(true);
+
+    // ตั้งค่าความแม่นยำสูง
+    const gpsOptions: PositionOptions = {
+      enableHighAccuracy: true, 
+      timeout: 15000,           
+      maximumAge: 0            
+    };
+
     navigator.geolocation.getCurrentPosition(
       (pos: GeolocationPosition) => {
-        setLocation({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() });
+        const lat = pos.coords.latitude.toString();
+        const lng = pos.coords.longitude.toString();
+        
+        setLocation({ lat, lng });
         setIsLocating(false);
+
+        // แสดง Alert แจ้งเตือนเมื่อสำเร็จ
+        alert(`📍 ดึงพิกัดสำเร็จ!\nละติจูด: ${lat}\nลองจิจูด: ${lng}`);
       }, 
-      () => { alert("ดึงพิกัดไม่สำเร็จ"); setIsLocating(false); }, 
-      { enableHighAccuracy: true }
+      (err) => { 
+        let errorMsg = "ดึงพิกัดไม่สำเร็จ";
+        if (err.code === 1) errorMsg = "กรุณาเปิดสิทธิ์เข้าถึงตำแหน่ง (Permission Denied)";
+        if (err.code === 2) errorMsg = "ไม่สามารถระบุตำแหน่งได้ (Position Unavailable)";
+        if (err.code === 3) errorMsg = "ค้นหาพิกัดนานเกินไป (Timeout)";
+        
+        alert(`❌ ${errorMsg}`); 
+        setIsLocating(false); 
+      }, 
+      gpsOptions
     );
   }, []);
 

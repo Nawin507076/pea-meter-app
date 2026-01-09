@@ -3,10 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BrowserMultiFormatReader } from "@zxing/library";
+import Link from "next/link";
 
 export default function AddInventory() {
   const router = useRouter();
-  const [staffName, setStaffName] = useState("");
+  const [staffName, setStaffName] = useState("นายธีรภัทร์ ขาวหนูนา");
   const [peaList, setPeaList] = useState<string[]>([]);
   const [currentInput, setCurrentInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
@@ -83,7 +84,13 @@ export default function AddInventory() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans">
       <div className="max-w-md mx-auto space-y-6">
-        <h1 className="text-3xl font-black text-blue-700 tracking-tight">📦 เบิกมิเตอร์ใหม่</h1>
+         <div className="w-full max-w-md mb-4 relative flex items-center">
+                  <Link href="/dashboard" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
+            กลับ
+          </Link>
+          <h1 className="text-3xl font-black text-blue-700 tracking-tight">📦 เบิกมิเตอร์ใหม่</h1>
+      </div>
+        
         
         {/* ชื่อคนเบิก */}
         <div className="bg-white p-6 rounded-[2rem] shadow-xl space-y-4">

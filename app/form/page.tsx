@@ -253,8 +253,8 @@ const getCurrentLocation = useCallback(() => {
 
       {/* Header */}
       <div className="bg-white border-b border-slate-100 p-5 sticky top-0 z-10 flex justify-between items-center shadow-sm">
-        <div className="flex flex-col"><span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">เจ้าหน้าที่</span><span className="text-blue-600 text-xl font-black tracking-tight">{workerInfo.worker}</span></div>
-        <div className="text-right flex flex-col"><span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">งาน</span><span className="text-slate-700 text-lg font-black tracking-tight">{workerInfo.jobType === "incident" ? "แก้ไฟ" : "บริการ"}</span></div>
+        <div className="flex flex-col"><span className="text-slate-400 text-[14px] font-black uppercase tracking-widest">เจ้าหน้าที่</span><span className="text-blue-600 text-xl font-black tracking-tight">{workerInfo.worker}</span></div>
+        <div className="text-right flex flex-col"><span className="text-slate-400 text-[14px] font-black uppercase tracking-widest">งาน</span><span className="text-slate-700 text-lg font-black tracking-tight">{workerInfo.jobType === "incident" ? "แก้ไฟ" : "บริการ"}</span></div>
       </div>
 
       <div className="max-w-md mx-auto px-4 mt-6">

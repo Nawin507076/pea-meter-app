@@ -126,9 +126,12 @@ export default function InventoryDashboard() {
         
         <header className="text-center space-y-2">
                 {/* 📊 ปุ่มไปหน้า Dashboard (วางไว้นอก Card หรือบนสุดของ Card) */}
-      <div className="w-full max-w-md mb-4 flex justify-end">
+      <div className="w-full max-w-md mb-4 flex justify-between">
+                  <Link href="/" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
+            กลับ
+          </Link>
         <Link href="/inventory/history" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-blue-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
-           ดูยอดที่สับเปลี่ยนในระบบแล้ว
+           รายการที่สับเปลี่ยนในระบบแล้ว
         </Link>
       </div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tight italic">📊 DASHBOARD</h1>
@@ -142,7 +145,7 @@ export default function InventoryDashboard() {
               viewMode === "remaining" ? "bg-blue-600 text-white border-blue-200 scale-105" : "bg-white text-blue-600 border-white"
             }`}
           >
-            <span className="text-[10px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">คงเหลือ แผนกแก้ไฟ</span>
+            <span className="text-[12px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">คงเหลือ แผนกแก้ไฟ</span>
             <div className="text-5xl font-black text-center">{data?.remainingCount || 0}</div>
           </button>
 
@@ -152,7 +155,7 @@ export default function InventoryDashboard() {
               viewMode === "installed" ? "bg-emerald-600 text-white border-emerald-200 scale-105" : "bg-white text-emerald-600 border-white"
             }`}
           >
-            <span className="text-[10px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">ประวัติงานสับเปลี่ยน</span>
+            <span className="text-[12px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">ประวัติงานสับเปลี่ยน</span>
             <div className="text-5xl font-black text-center">{data?.installedCount || 0}</div>
           </button>
         </div>
@@ -181,7 +184,7 @@ export default function InventoryDashboard() {
                       </div>
                       <div>
                         <div className="text-2xl font-black text-slate-800 tracking-tighter leading-none">{item.pea}</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase mt-2">เบิกโดย: {item.staff}</div>
+                        <div className="text-[14px] font-bold text-slate-400 uppercase mt-2">เบิกโดย: {item.staff}</div>
                       </div>
                     </div>
                     {viewMode === "installed" && (
@@ -196,7 +199,7 @@ export default function InventoryDashboard() {
                       <div className="h-px bg-slate-100 w-full mb-2"></div>
 
                       <div className="bg-emerald-600 p-6 rounded-[2rem] text-white shadow-lg shadow-emerald-100">
-                        <span className="text-[10px] font-black uppercase opacity-70 tracking-widest">พนักงานผู้ปฏิบัติงาน</span>
+                        <span className="text-[14px] font-black uppercase opacity-70 tracking-widest">พนักงานผู้ปฏิบัติงาน</span>
                         <div className="text-3xl font-black mt-1 leading-tight">{item.history.worker}</div>
                       </div>
 
@@ -208,7 +211,7 @@ export default function InventoryDashboard() {
                            </div>
                            <div className="text-center p-2 bg-red-50 rounded-2xl border border-red-100">
                               <div className="text-lg font-black text-slate-700 leading-none">{item.history.peaOld}</div>
-                              <div className="text-[10px] font-bold text-slate-400 uppercase mt-1">หน่วย: {item.history.oldUnit}</div>
+                              <div className="text-[14px] font-bold text-slate-400 uppercase mt-1">หน่วย: {item.history.oldUnit}</div>
                            </div>
                         </div>
 
@@ -219,7 +222,7 @@ export default function InventoryDashboard() {
                            </div>
                            <div className="text-center p-2 bg-emerald-50 rounded-2xl border border-emerald-100">
                               <div className="text-lg font-black text-slate-700 leading-none">{item.pea}</div>
-                              <div className="text-[10px] font-bold text-slate-400 uppercase mt-1">หน่วย: {item.history.newUnit}</div>
+                              <div className="text-[14px] font-bold text-slate-400 uppercase mt-1">หน่วย: {item.history.newUnit}</div>
                            </div>
                         </div>
                       </div>
@@ -241,7 +244,16 @@ export default function InventoryDashboard() {
                             : "bg-blue-600 text-white shadow-blue-200"
                           }`}
                         >
-                          {updateLoading === item.pea ? "⏳ กำลังบันทึก..." : "✅ สับเปลี่ยนในระบบแล้ว"}
+                          {updateLoading === item.pea ? (
+  "⏳ กำลังบันทึก..."
+) : (
+  <span className="flex flex-col leading-tight">
+    <span>✅ สับเปลี่ยนในระบบแล้ว</span>
+    <span className="text-[16px] opacity-70">
+      (พี่ดำคนเดียว)
+    </span>
+  </span>
+)}
                         </button>
                         
                         <a 

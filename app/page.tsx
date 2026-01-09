@@ -108,7 +108,7 @@ export default function Home() {
                   <img
                     src="/images/car.png" 
                     alt="Repair Work"
-                    className="w-full h-full object-contain p-2"
+                    className="w-full h-full object-contain"
                   />
                 </div>
                 <span className={`text-base font-black leading-tight text-center ${jobType === "repair" ? "text-blue-700" : "text-slate-600"}`}>

@@ -1,63 +1,43 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
-import { Readable } from "stream";
+import { v2 as cloudinary } from "cloudinary";
 
-// ⚠️ ตรวจสอบ Folder ID ของคุณอีกครั้ง
-const DRIVE_FOLDER_ID = "1E9J1BdvfliTowlaKgqO0XSGztX-ndidG"; 
-
-interface MeterData {
-  timestamp: string;
-  worker: string;
-  jobType: string;
-  peaOld: string;
-  oldUnit: string;
-  photoOld: string;
-  peaNew: string;
-  newUnit: string;
-  photoNew: string;
-  remark: string;
-  lat: string;
-  lng: string;
-}
+// 1. ตั้งค่า Cloudinary (ดึงค่าจาก .env.local ที่คุณไปก๊อปมา)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 /**
- * ฟังก์ชันอัปโหลดไฟล์ไป Google Drive
- * ระบุ Type Auth ของ Google ให้ถูกต้องเพื่อเลี่ยง Error 'any'
+ * ฟังก์ชันอัปโหลดรูปไป Cloudinary (มาแทน uploadToDrive เดิม)
  */
-async function uploadToDrive(
-  file: File, 
-  auth: InstanceType<typeof google.auth.GoogleAuth>
-): Promise<string> {
+async function uploadToCloudinary(file: File): Promise<string> {
   try {
-    if (file.size === 0) return "";
-
-    const drive = google.drive({ version: "v3", auth });
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     
-    const stream = new Readable();
-    stream.push(buffer);
-    stream.push(null);
-
-    // ปล่อยให้ TypeScript คาดเดา Type (Inference) เพื่อเลี่ยงปัญหา Header Incompatible
-    const response = await drive.files.create({
-      requestBody: {
-        name: `meter_${Date.now()}_${file.name}`,
-        parents: [DRIVE_FOLDER_ID],
-      },
-      media: {
-        mimeType: file.type,
-        body: stream,
-      },
-      fields: "id",
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { 
+          folder: "meter_photos",
+          resource_type: "auto" 
+        },
+        (error, result) => {
+          if (error) {
+            console.error("Cloudinary Upload Error:", error);
+            reject(error);
+          } else {
+            // คืนค่าเป็น URL รูปภาพ (https://...)
+            resolve(result?.secure_url || ""); 
+          }
+        }
+      );
+      uploadStream.end(buffer);
     });
-
-    console.log(`✅ อัปโหลดสำเร็จ ID: ${response.data.id}`);
-    return response.data.id || "";
-  } catch (error: unknown) {
-    const errorMsg = error instanceof Error ? error.message : "Drive Upload Error";
-    console.error("❌ Drive Error:", errorMsg);
+  } catch (err) {
+    console.error("Cloudinary Buffer Error:", err);
     return "";
   }
 }
@@ -72,59 +52,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing Env" }, { status: 500 });
     }
 
+    // รับไฟล์รูปจาก FormData
+    const photoOldFile = formData.get("photoOld") as File | null;
+    const photoNewFile = formData.get("photoNew") as File | null;
+
+    // --- ส่วนที่ 1: อัปโหลดรูปไป Cloudinary ---
+    const [photoOldUrl, photoNewUrl] = await Promise.all([
+      photoOldFile && photoOldFile.size > 0 ? uploadToCloudinary(photoOldFile) : Promise.resolve(""),
+      photoNewFile && photoNewFile.size > 0 ? uploadToCloudinary(photoNewFile) : Promise.resolve("")
+    ]);
+
+    // --- ส่วนที่ 2: ตั้งค่า Google Auth (ใช้เฉพาะสิทธิ์ Sheets) ---
     const serviceAccount = JSON.parse(keyRaw.trim());
-    
-    // 1. ตั้งค่า Auth พร้อม Scopes ที่จำเป็นสำหรับการเขียนไฟล์และเขียนชีท
     const auth = new google.auth.GoogleAuth({
       credentials: { 
         client_email: serviceAccount.client_email, 
         private_key: serviceAccount.private_key.replace(/\\n/g, "\n") 
       },
-      scopes: [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive.file"
-      ],
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
 
-    // 2. รับไฟล์จาก FormData (ตรวจสอบ name="photoOld" และ "photoNew" ในหน้าฟอร์มด้วย)
-    const photoOldFile = formData.get("photoOld") as File | null;
-    const photoNewFile = formData.get("photoNew") as File | null;
-
-    // 3. อัปโหลดรูปพร้อมกัน (Parallel)
-    const [photoOldId, photoNewId] = await Promise.all([
-      photoOldFile && photoOldFile.size > 0 ? uploadToDrive(photoOldFile, auth) : Promise.resolve(""),
-      photoNewFile && photoNewFile.size > 0 ? uploadToDrive(photoNewFile, auth) : Promise.resolve("")
-    ]);
-
-    // 4. เตรียมข้อมูล Payload ทั้งหมด
-    const payload: MeterData = {
-      timestamp: formData.get("timestamp")?.toString() || new Date().toLocaleString("th-TH"),
-      worker: formData.get("worker")?.toString() || "",
-      jobType: formData.get("jobType")?.toString() || "",
-      peaOld: formData.get("peaOld")?.toString() || "",
-      oldUnit: formData.get("oldUnit")?.toString() || "",
-      photoOld: photoOldId, 
-      peaNew: formData.get("peaNew")?.toString() || "",
-      newUnit: formData.get("newUnit")?.toString() || "",
-      photoNew: photoNewId, 
-      remark: formData.get("remark")?.toString() || "",
-      lat: formData.get("lat")?.toString() || "",
-      lng: formData.get("lng")?.toString() || "",
-    };
-
     const sheets = google.sheets({ version: "v4", auth });
-    const mapLink = (payload.lat && payload.lng) 
-      ? `https://www.google.com/maps?q=${payload.lat},${payload.lng}` 
-      : "";
+    
+    // ดึงค่าอื่นๆ จากฟอร์ม
+    const lat = formData.get("lat")?.toString() || "";
+    const lng = formData.get("lng")?.toString() || "";
+    const peaNew = formData.get("peaNew")?.toString() || "";
+    const timestamp = formData.get("timestamp")?.toString() || new Date().toLocaleString("th-TH");
 
-    // 5. ข้อมูลลง Sheet (A-M) มั่นใจว่า photoOld/New อยู่ใน Index 5 และ 8
-    const values: string[][] = [[
-      payload.timestamp, payload.worker, payload.jobType, payload.peaOld,
-      payload.oldUnit, payload.photoOld, payload.peaNew, payload.newUnit,
-      payload.photoNew, payload.remark, payload.lat, payload.lng, mapLink
+    // --- ส่วนที่ 3: บันทึกข้อมูลลง Sheet1 ---
+    const values = [[
+      timestamp,
+      formData.get("worker")?.toString() || "",
+      formData.get("jobType")?.toString() || "",
+      formData.get("peaOld")?.toString() || "",
+      formData.get("oldUnit")?.toString() || "",
+      photoOldUrl, // กลายเป็น Link รูปภาพแล้ว
+      peaNew,
+      formData.get("newUnit")?.toString() || "",
+      photoNewUrl, // กลายเป็น Link รูปภาพแล้ว
+      formData.get("remark")?.toString() || "",
+      lat,
+      lng,
+      (lat && lng) ? `https://www.google.com/maps?q=${lat},${lng}` : ""
     ]];
 
-    // บันทึกประวัติลง Sheet1
     await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId.trim(),
       range: "Sheet1!A1", 
@@ -132,7 +104,7 @@ export async function POST(req: NextRequest) {
       requestBody: { values },
     });
 
-    // 6. อัปเดตสถานะ Inventory
+    // --- ส่วนที่ 4: ตัดสต็อก Inventory (เหมือนเดิมเป๊ะ) ---
     const invRes = await sheets.spreadsheets.values.get({ 
       spreadsheetId: sheetId.trim(), 
       range: "Inventory!A:A" 
@@ -140,13 +112,13 @@ export async function POST(req: NextRequest) {
 
     const invRows = invRes.data.values as string[][] | null | undefined;
     if (invRows) {
-      const rowIndex = invRows.findIndex((row) => row[0] === payload.peaNew);
+      const rowIndex = invRows.findIndex((row) => row[0] === peaNew);
       if (rowIndex !== -1) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: sheetId.trim(),
           range: `Inventory!D${rowIndex + 1}:E${rowIndex + 1}`,
           valueInputOption: "USER_ENTERED",
-          requestBody: { values: [["yes", payload.timestamp]] }
+          requestBody: { values: [["yes", timestamp]] }
         });
       }
     }

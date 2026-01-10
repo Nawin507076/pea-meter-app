@@ -102,23 +102,25 @@ useEffect(() => {
   if (scanning.active && videoRef.current) {
     const hints = new Map();
 
-    // 🎯 PEA meter = CODE_128
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.CODE_128,
-    ]);
+    // 1. ระบุ Format ให้ชัดเจน (ลดภาระ CPU มือถือ)
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
 
-    // 🔥 สำคัญกับพลาสติกสะท้อน
+    // 2. 🔥 สำคัญ: ต้องเป็น false หรือเอาออกไปเลยสำหรับงาน Field Work
+    hints.set(DecodeHintType.PURE_BARCODE, false); 
+
+    // 3. เปิดโหมดพยายามหนักขึ้น
     hints.set(DecodeHintType.TRY_HARDER, true);
-    hints.set(DecodeHintType.PURE_BARCODE, true);
 
-    // ลด jitter / frame drop
+    // 4. หน่วงเวลาวิเคราะห์ภาพ (300ms กำลังดี ไม่กระตุก)
     codeReader = new BrowserMultiFormatReader(hints, 300);
 
     const constraints: MediaStreamConstraints = {
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
+        // ปรับความละเอียดลงเล็กน้อยเป็น 720p เพื่อให้โฟกัสในมือถือทำงานไวขึ้น 
+        // (1080p บางรุ่นประมวลผลไม่ทันจนภาพเบลอ)
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
       },
     };
 
@@ -128,14 +130,14 @@ useEffect(() => {
       (result) => {
         if (!result) return;
 
+        // ดึงเฉพาะตัวเลข
         const text = result.getText().replace(/\D/g, "");
 
-        // ✅ เลข PEA ปกติ 9–12 หลัก
         if (text.length >= 9) {
           if (scanning.target === "old") setPeaOld(text);
           else setPeaNew(text);
 
-          navigator.vibrate?.(120);
+          if (navigator.vibrate) navigator.vibrate(100);
           setScanning(p => ({ ...p, active: false }));
         }
       }

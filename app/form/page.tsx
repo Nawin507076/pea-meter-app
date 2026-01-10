@@ -96,29 +96,59 @@ export default function MultiStepMeterForm() {
     if (!workerInfo) { router.push("/"); }
   }, [workerInfo, router]);
 
-  useEffect(() => {
-    let codeReader: BrowserMultiFormatReader | null = null;
-    if (scanning.active && videoRef.current) {
-      const hints = new Map();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.QR_CODE]);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-      codeReader = new BrowserMultiFormatReader(hints);
-      codeReader.decodeFromConstraints(
-        { video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } }, 
-        videoRef.current, 
-        (result: Result | null) => {
-          if (result) {
-            const text = result.getText().replace(/[^0-9]/g, "");
-            if (scanning.target === "old") setPeaOld(text);
-            else setPeaNew(text);
-            if (navigator.vibrate) navigator.vibrate(100);
-            setScanning(prev => ({ ...prev, active: false }));
-          }
+useEffect(() => {
+  let codeReader: BrowserMultiFormatReader | null = null;
+
+  if (scanning.active && videoRef.current) {
+    const hints = new Map();
+
+    // 🎯 PEA meter = CODE_128
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.CODE_128,
+    ]);
+
+    // 🔥 สำคัญกับพลาสติกสะท้อน
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    hints.set(DecodeHintType.PURE_BARCODE, true);
+
+    // ลด jitter / frame drop
+    codeReader = new BrowserMultiFormatReader(hints, 300);
+
+    const constraints: MediaStreamConstraints = {
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    };
+
+    codeReader.decodeFromConstraints(
+      constraints,
+      videoRef.current,
+      (result) => {
+        if (!result) return;
+
+        const text = result.getText().replace(/\D/g, "");
+
+        // ✅ เลข PEA ปกติ 9–12 หลัก
+        if (text.length >= 9) {
+          if (scanning.target === "old") setPeaOld(text);
+          else setPeaNew(text);
+
+          navigator.vibrate?.(120);
+          setScanning(p => ({ ...p, active: false }));
         }
-      );
-    }
-    return () => { if (codeReader) codeReader.reset(); };
-  }, [scanning.active, scanning.target]);
+      }
+    );
+  }
+
+  return () => {
+    codeReader?.reset();
+  };
+}, [scanning.active, scanning.target]);
+
+
+
 
 const getCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) return alert("ไม่รองรับ GPS");

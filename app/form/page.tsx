@@ -105,47 +105,52 @@ useEffect(() => {
     // 1. ระบุ Format ให้ชัดเจน (ลดภาระ CPU มือถือ)
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
 
-    // 2. 🔥 สำคัญ: ต้องเป็น false หรือเอาออกไปเลยสำหรับงาน Field Work
+    // 2. ❌ ห้ามเป็น true สำหรับงานหน้างานที่มีแสงสะท้อนและเงา
     hints.set(DecodeHintType.PURE_BARCODE, false); 
 
-    // 3. เปิดโหมดพยายามหนักขึ้น
+    // 3. 🔥 เปิดโหมดพยายามหนักขึ้น ช่วยรุ่น Mascell ที่บาร์โค้ดถี่และเล็กได้ดีมาก
     hints.set(DecodeHintType.TRY_HARDER, true);
 
-    // 4. หน่วงเวลาวิเคราะห์ภาพ (300ms กำลังดี ไม่กระตุก)
+    // 4. หน่วงเวลาวิเคราะห์ภาพ 300ms เพื่อให้เครื่องไม่ร้อนและโฟกัสภาพทัน
     codeReader = new BrowserMultiFormatReader(hints, 300);
 
-    const constraints: MediaStreamConstraints = {
-      video: {
-        facingMode: { ideal: "environment" },
-        // ปรับความละเอียดลงเล็กน้อยเป็น 720p เพื่อให้โฟกัสในมือถือทำงานไวขึ้น 
-        // (1080p บางรุ่นประมวลผลไม่ทันจนภาพเบลอ)
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
+    // แก้ไขโครงสร้าง Video Constraints ให้ถูกต้องตามมาตรฐาน TypeScript
+    const videoConstraints: MediaTrackConstraints = {
+      facingMode: "environment",
+      // ใช้ 720p เพื่อให้ประมวลผลได้ไวและโฟกัสไม่หลุดง่ายในมือถือ
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
     };
 
     codeReader.decodeFromConstraints(
-      constraints,
+      { video: videoConstraints }, // ✅ ต้องครอบด้วย Object ที่มี key ชื่อ video
       videoRef.current,
-      (result) => {
-        if (!result) return;
+      (result, error) => {
+        // จัดการกรณีที่สแกนติด (Result ไม่เป็น null)
+        if (result) {
+          const text = result.getText().replace(/\D/g, "");
 
-        // ดึงเฉพาะตัวเลข
-        const text = result.getText().replace(/\D/g, "");
+          // ตรวจสอบความยาวเลข PEA (ปกติ 10 หลัก)
+          if (text.length >= 9) {
+            if (scanning.target === "old") setPeaOld(text);
+            else setPeaNew(text);
 
-        if (text.length >= 9) {
-          if (scanning.target === "old") setPeaOld(text);
-          else setPeaNew(text);
-
-          if (navigator.vibrate) navigator.vibrate(100);
-          setScanning(p => ({ ...p, active: false }));
+            if (navigator.vibrate) navigator.vibrate(100);
+            setScanning(p => ({ ...p, active: false }));
+          }
         }
+
+        // หมายเหตุ: ไม่ต้องจัดการ error ตรงนี้ เพราะมันจะพ่น error ออกมาทุกครั้งที่สแกนไม่ติดในเฟรมนั้นๆ
       }
-    );
+    ).catch((err) => {
+      console.error("Camera access error:", err);
+    });
   }
 
   return () => {
-    codeReader?.reset();
+    if (codeReader) {
+      codeReader.reset();
+    }
   };
 }, [scanning.active, scanning.target]);
 

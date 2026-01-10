@@ -239,47 +239,50 @@ const getCurrentLocation = useCallback(() => {
     <div className="min-h-screen bg-[#f8fafc] pb-10 font-sans overflow-x-hidden">
       
       {/* 🔴 Scanner UI: ปรับเส้นแดงใหญ่ และมีเส้นเล็กตรงกลาง */}
-      {scanning.active && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden font-sans">
-          <div className="relative w-full h-full">
-            <video ref={videoRef} className="w-full h-full object-cover" playsInline />
-            
-            {/* Overlay Layer */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              
-              {/* กรอบเล็งขนาดใหญ่ */}
-              <div className="relative w-72 h-48 border-2 border-white/30 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] flex items-center justify-center">
-                
-                {/* มุมกรอบสีขาวหนา */}
-                <div className="absolute -top-1 -left-1 w-10 h-10 border-t-8 border-l-8 border-white rounded-tl-2xl"></div>
-                <div className="absolute -top-1 -right-1 w-10 h-10 border-t-8 border-r-8 border-white rounded-tr-2xl"></div>
-                <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-8 border-l-8 border-white rounded-bl-2xl"></div>
-                <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-8 border-r-8 border-white rounded-br-2xl"></div>
+{scanning.active && (
+  <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden font-sans">
+    <div className="relative w-full h-full">
+      <video ref={videoRef} className="w-full h-full object-cover" playsInline />
+      
+      {/* Overlay Layer */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+        {/* กรอบเล็งแบบแนวตั้ง (สูง 80 กว้าง 56) */}
+        <div className="relative w-56 h-80 border-2 border-white/20 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] flex items-center justify-center">
+          
+          {/* มุมกรอบสีขาว (หนาและเด่นชัด) */}
+          <div className="absolute -top-1 -left-1 w-12 h-12 border-t-[10px] border-l-[10px] border-white rounded-tl-3xl"></div>
+          <div className="absolute -top-1 -right-1 w-12 h-12 border-t-[10px] border-r-[10px] border-white rounded-tr-3xl"></div>
+          <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-[10px] border-l-[10px] border-white rounded-bl-3xl"></div>
+          <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-[10px] border-r-[10px] border-white rounded-br-3xl"></div>
 
-                {/* ⚡ เส้นเลเซอร์สีแดงใหญ่ (Animation) */}
-                <div className="absolute left-0 w-full h-1 bg-red-600 shadow-[0_0_15px_#dc2626] animate-scan-line-long"></div>
+          {/* ⚡ เส้นเลเซอร์สีแดง (แนวตั้ง - วิ่งซ้ายไปขวา) */}
+          <div className="absolute top-0 w-1.5 h-full bg-red-600 shadow-[0_0_20px_#dc2626] animate-scan-line-vertical"></div>
 
-                {/* ⚡ เส้นเล็กตรงกลาง (จุดเล็งถาวร) */}
-                <div className="w-[90%] h-[1px] bg-red-500/80 shadow-[0_0_5px_#ef4444]"></div>
-              </div>
-
-              <p className="mt-10 text-white font-black text-xl tracking-widest drop-shadow-lg">
-                วางบาร์โค้ดในกรอบ
-              </p>
-            </div>
-
-            {/* ปุ่มยกเลิก */}
-            <div className="absolute bottom-10 w-full px-10">
-              <button 
-                onClick={() => setScanning(p => ({ ...p, active: false }))} 
-                className="w-full py-5 bg-white/10 backdrop-blur-md border-2 border-white/30 text-white text-2xl font-black rounded-3xl active:scale-95 transition-all"
-              >
-                ยกเลิก
-              </button>
-            </div>
-          </div>
+          {/* ⚡ เส้นกึ่งกลางถาวร (แนวตั้ง) */}
+          <div className="h-[90%] w-[2px] bg-red-500/40 shadow-[0_0_8px_#ef4444]"></div>
         </div>
-      )}
+
+        <p className="mt-12 text-white font-black text-2xl tracking-widest drop-shadow-[0_2px_10px_rgba(0,0,0,1)]">
+          สแกนบาร์โค้ดแนวตั้ง
+        </p>
+        <p className="mt-12 text-white font-black text-2xl tracking-widest drop-shadow-[0_2px_10px_rgba(0,0,0,1)]">
+          เอียงมิเตอร์แนวนอน
+        </p>
+       
+      </div>
+
+      {/* ปุ่มยกเลิก */}
+      <div className="absolute bottom-10 w-full px-10">
+        <button 
+          onClick={() => setScanning(p => ({ ...p, active: false }))} 
+          className="w-full py-6 bg-red-600/20 backdrop-blur-xl border-2 border-red-500/50 text-white text-2xl font-black rounded-3xl active:scale-95 transition-all"
+        >
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Header */}
       <div className="bg-white border-b border-slate-100 p-5 sticky top-0 z-10 flex justify-between items-center shadow-sm">
@@ -372,17 +375,17 @@ const getCurrentLocation = useCallback(() => {
         </div>
       </div>
 
-      <style jsx global>{`
-        @keyframes scan-line-long {
-          0% { top: 0%; }
-          50% { top: 100%; }
-          100% { top: 0%; }
-        }
-        .animate-scan-line-long {
-          position: absolute;
-          animation: scan-line-long 2s ease-in-out infinite;
-        }
-      `}</style>
+     <style jsx global>{`
+  @keyframes scan-line-vertical {
+    0% { left: 5%; opacity: 0.5; }
+    50% { left: 95%; opacity: 1; }
+    100% { left: 5%; opacity: 0.5; }
+  }
+  .animate-scan-line-vertical {
+    position: absolute;
+    animation: scan-line-vertical 2s ease-in-out infinite;
+  }
+`}</style>
     </div>
   );
 }

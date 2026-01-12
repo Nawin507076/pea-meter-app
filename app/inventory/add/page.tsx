@@ -7,7 +7,18 @@ import Link from "next/link";
 
 export default function AddInventory() {
   const router = useRouter();
-  const [staffName, setStaffName] = useState("นายธีรภัทร์ ขาวหนูนา");
+  
+  // รายชื่อพนักงานสำหรับ Select
+  const staffList = [
+    "นายธีรภัทร์ ขาวหนูนา",
+    "นายนภสินธุ์ เลาหสกุล",
+    "นายราเชน เจี้ยนเซ่ง",
+    "นายนาวิน แก้วล่อง",
+    "นายเอนกพงศ์ บุญศิริ"
+  ];
+
+  // ✅ ปรับ State เริ่มต้นให้เป็นชื่อแรกในรายการ
+  const [staffName, setStaffName] = useState(staffList[0]);
   const [peaList, setPeaList] = useState<string[]>([]);
   const [currentInput, setCurrentInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
@@ -53,16 +64,23 @@ export default function AddInventory() {
     return () => reader?.reset();
   }, [isScanning]);
 
-  const handleSubmit = async () => {
+const handleSubmit = async () => {
     if (!staffName || peaList.length === 0) return alert("กรุณาระบุชื่อคนเบิกและระบุมิเตอร์อย่างน้อย 1 เครื่อง");
-    // 🛡️ ระบบเช็ครหัสผ่านก่อนบันทึก
+    
+    // จังหวะที่ 1: แจ้งเตือนให้ตรวจสอบ (ไม่ต้องกรอกรหัส แค่กด OK เพื่อไปต่อ)
+    // ใช้ window.confirm จะเหมาะสมกว่า เพราะผู้ใช้แค่กด "ตกลง" หรือ "ยกเลิก"
+    const confirmCheck = window.confirm("⚠️ กรุณาตรวจสอบหมายเลข PEA ให้ถูกต้องก่อนกดบันทึกข้อมูล\n\nกด 'ตกลง' หากตรวจสอบเรียบร้อยแล้ว");
+    if (!confirmCheck) return; // ถ้ากด "ยกเลิก" ให้หยุดการทำงาน
+
+    // จังหวะที่ 2: ช่องใส่รหัสผ่านจริง
     const password = window.prompt("กรุณาใส่รหัสผ่านเจ้าหน้าที่คลังเพื่อบันทึกข้อมูล:");
     
-    if (password === null) return; // กดยกเลิก
+    if (password === null) return; // กดยกเลิกในช่องรหัสผ่าน
     if (password !== ADMIN_PASSWORD) {
       alert("❌ รหัสผ่านไม่ถูกต้อง! เฉพาะเจ้าหน้าที่คลังเท่านั้นที่สามารถบันทึกได้");
       return;
     }
+
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/inventory", {
@@ -85,23 +103,32 @@ export default function AddInventory() {
     <div className="min-h-screen bg-slate-50 p-6 font-sans">
       <div className="max-w-md mx-auto space-y-6">
          <div className="w-full max-w-md mb-4 relative flex items-center">
-                  <Link href="/dashboard" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
+          <Link href="/dashboard" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
             กลับ
           </Link>
-          <h1 className="text-3xl font-black text-blue-700 tracking-tight">📦 เบิกมิเตอร์ใหม่</h1>
+          <h1 className="text-3xl font-black text-blue-700 tracking-tight ml-4">📦 เบิกมิเตอร์ใหม่</h1>
       </div>
         
-        
-        {/* ชื่อคนเบิก */}
+        {/* ชื่อคนเบิก - เปลี่ยนจาก Input เป็น Select */}
         <div className="bg-white p-6 rounded-[2rem] shadow-xl space-y-4">
           <label className="block text-sm font-bold text-slate-500 ml-2">ชื่อพนักงานที่เบิก</label>
-          <input 
-            value={staffName} 
-            onChange={(e) => setStaffName(e.target.value)}
-            placeholder="ระบุชื่อผู้เบิก..."
-            // ✅ แก้ไข: เพิ่ม text-black และ appearance-none เพื่อให้มือถือไม่ปรับสีเอง
-            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-black placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white appearance-none"
-          />
+          <div className="relative">
+            <select 
+              value={staffName} 
+              onChange={(e) => setStaffName(e.target.value)}
+              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-black outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white appearance-none cursor-pointer"
+            >
+              {staffList.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            {/* ลูกศร Dropdown สำหรับ Select */}
+            <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400">
+              ▼
+            </div>
+          </div>
         </div>
 
         {/* ส่วนป้อนเลข PEA (พิมพ์มือ + สแกน) */}
@@ -111,7 +138,6 @@ export default function AddInventory() {
           </div>
           
           <div className="space-y-3">
-            {/* ช่องพิมพ์มือ */}
             <div className="flex gap-2">
               <input 
                 value={currentInput} 
@@ -119,7 +145,6 @@ export default function AddInventory() {
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPea(currentInput); } }}
                 placeholder="พิมพ์เลขมิเตอร์..."
                 type="number"
-                // ✅ แก้ไข: บังคับ text-black และใส่ appearance-none กันสีจางใน iPhone/Android
                 className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-black placeholder-slate-400 outline-none focus:bg-white appearance-none"
               />
               <button 
@@ -130,7 +155,6 @@ export default function AddInventory() {
               </button>
             </div>
 
-            {/* ปุ่มสแกน */}
             <button 
               onClick={() => setIsScanning(true)} 
               disabled={peaList.length >= 10}
@@ -140,7 +164,6 @@ export default function AddInventory() {
             </button>
           </div>
 
-          {/* รายการที่คีย์เข้าไปแล้ว */}
           <div className="mt-4 space-y-2 max-h-64 overflow-y-auto pt-2 border-t border-slate-50">
             {peaList.length === 0 && <p className="text-center text-slate-300 py-4 text-sm font-bold italic">ยังไม่มีรายการที่เพิ่ม</p>}
             {peaList.map((pea, index) => (
@@ -162,7 +185,7 @@ export default function AddInventory() {
         </button>
       </div>
 
-      {/* 🔴 Scanner UI */}
+      {/* Scanner UI */}
       {isScanning && (
         <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center overflow-hidden">
           <div className="relative w-full h-full">

@@ -8,7 +8,6 @@ import Link from "next/link";
 export default function AddInventory() {
   const router = useRouter();
   
-  // รายชื่อพนักงานสำหรับ Select
   const staffList = [
     "นายธีรภัทร์ ขาวหนูนา",
     "นายนภสินธุ์ เลาหสกุล",
@@ -17,7 +16,6 @@ export default function AddInventory() {
     "นายเอนกพงศ์ บุญศิริ"
   ];
 
-  // ✅ ปรับ State เริ่มต้นให้เป็นชื่อแรกในรายการ
   const [staffName, setStaffName] = useState(staffList[0]);
   const [peaList, setPeaList] = useState<string[]>([]);
   const [currentInput, setCurrentInput] = useState("");
@@ -25,10 +23,8 @@ export default function AddInventory() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // 🔐 ตั้งรหัสผ่านที่นี่
   const ADMIN_PASSWORD = "1234";
 
-  // ฟังก์ชันเพิ่มเลข (ใช้ทั้งพิมพ์มือ และ สแกน)
   const addPea = (code: string) => {
     if (!code.trim()) return;
     if (peaList.length >= 10) {
@@ -36,7 +32,6 @@ export default function AddInventory() {
       setIsScanning(false);
       return;
     }
-
     const cleanCode = code.trim().replace(/[^0-9]/g, "");
     if (cleanCode) {
       if (peaList.includes(cleanCode)) {
@@ -49,7 +44,6 @@ export default function AddInventory() {
     setCurrentInput("");
   };
 
-  // ระบบสแกนเนอร์
   useEffect(() => {
     let reader: BrowserMultiFormatReader | null = null;
     if (isScanning && videoRef.current) {
@@ -64,22 +58,24 @@ export default function AddInventory() {
     return () => reader?.reset();
   }, [isScanning]);
 
-const handleSubmit = async () => {
-    if (!staffName || peaList.length === 0) return alert("กรุณาระบุชื่อคนเบิกและระบุมิเตอร์อย่างน้อย 1 เครื่อง");
-    
-    // จังหวะที่ 1: แจ้งเตือนให้ตรวจสอบ (ไม่ต้องกรอกรหัส แค่กด OK เพื่อไปต่อ)
-    // ใช้ window.confirm จะเหมาะสมกว่า เพราะผู้ใช้แค่กด "ตกลง" หรือ "ยกเลิก"
+  // --- ฟังก์ชันยืนยันรหัสผ่านร่วมกัน ---
+  const verifyAdmin = () => {
     const confirmCheck = window.confirm("⚠️ กรุณาตรวจสอบหมายเลข PEA ให้ถูกต้องก่อนกดบันทึกข้อมูล\n\nกด 'ตกลง' หากตรวจสอบเรียบร้อยแล้ว");
-    if (!confirmCheck) return; // ถ้ากด "ยกเลิก" ให้หยุดการทำงาน
+    if (!confirmCheck) return false;
 
-    // จังหวะที่ 2: ช่องใส่รหัสผ่านจริง
     const password = window.prompt("กรุณาใส่รหัสผ่านเจ้าหน้าที่คลังเพื่อบันทึกข้อมูล:");
-    
-    if (password === null) return; // กดยกเลิกในช่องรหัสผ่าน
+    if (password === null) return false;
     if (password !== ADMIN_PASSWORD) {
-      alert("❌ รหัสผ่านไม่ถูกต้อง! เฉพาะเจ้าหน้าที่คลังเท่านั้นที่สามารถบันทึกได้");
-      return;
+      alert("❌ รหัสผ่านไม่ถูกต้อง!");
+      return false;
     }
+    return true;
+  };
+
+  // 1. ฟังก์ชันเบิกมิเตอร์ (เดิม)
+  const handleSubmit = async () => {
+    if (!staffName || peaList.length === 0) return alert("กรุณาระบุชื่อคนเบิกและระบุมิเตอร์อย่างน้อย 1 เครื่อง");
+    if (!verifyAdmin()) return;
 
     setIsSubmitting(true);
     try {
@@ -99,19 +95,49 @@ const handleSubmit = async () => {
     }
   };
 
+  // 2. ✅ ฟังก์ชันคืนคลัง (ใหม่)
+// 2. ✅ ฟังก์ชันคืนคลัง (แก้ไขการแสดง Error)
+  const handleReturn = async () => {
+    if (peaList.length === 0) return alert("กรุณาระบุมิเตอร์อย่างน้อย 1 เครื่องเพื่อคืนคลัง");
+    if (!verifyAdmin()) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/inventory/return", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: peaList, staffName, status: 'back' }),
+      });
+
+      // ดึงข้อมูล Json จาก API มาดูว่าสำเร็จหรือติด Error อะไร
+      const result = await res.json();
+
+      if (res.ok) {
+        alert("บันทึกรายการคืนคลังสำเร็จ ✅");
+        router.push("/dashboard");
+      } else {
+        // ✅ แก้ไขตรงนี้: ให้แสดงข้อความ Error ที่ส่งมาจาก API (เช่น ติด 'yes' หรือหาไม่เจอ)
+        alert(result.error || "เกิดข้อผิดพลาดในการคืนคลัง");
+      }
+    } catch (err) {
+      alert("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6 font-sans">
+    <div className="min-h-screen bg-slate-50 p-6 font-sans pb-20">
       <div className="max-w-md mx-auto space-y-6">
-         <div className="w-full max-w-md mb-4 relative flex items-center">
+        <div className="w-full max-w-md mb-4 relative flex items-center">
           <Link href="/dashboard" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
             กลับ
           </Link>
-          <h1 className="text-3xl font-black text-blue-700 tracking-tight ml-4">📦 เบิกมิเตอร์ใหม่</h1>
-      </div>
+          <h1 className="text-3xl font-black text-blue-700 tracking-tight ml-4">📦 จัดการมิเตอร์</h1>
+        </div>
         
-        {/* ชื่อคนเบิก - เปลี่ยนจาก Input เป็น Select */}
         <div className="bg-white p-6 rounded-[2rem] shadow-xl space-y-4">
-          <label className="block text-sm font-bold text-slate-500 ml-2">ชื่อพนักงานที่เบิก</label>
+          <label className="block text-sm font-bold text-slate-500 ml-2">ชื่อพนักงาน</label>
           <div className="relative">
             <select 
               value={staffName} 
@@ -119,19 +145,13 @@ const handleSubmit = async () => {
               className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-black outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white appearance-none cursor-pointer"
             >
               {staffList.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
+                <option key={name} value={name}>{name}</option>
               ))}
             </select>
-            {/* ลูกศร Dropdown สำหรับ Select */}
-            <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400">
-              ▼
-            </div>
+            <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400">▼</div>
           </div>
         </div>
 
-        {/* ส่วนป้อนเลข PEA (พิมพ์มือ + สแกน) */}
         <div className="bg-white p-6 rounded-[2rem] shadow-xl space-y-4">
           <div className="flex justify-between items-center ml-2">
              <label className="text-sm font-bold text-slate-500">เลข PEA ({peaList.length}/10)</label>
@@ -147,12 +167,7 @@ const handleSubmit = async () => {
                 type="number"
                 className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-black placeholder-slate-400 outline-none focus:bg-white appearance-none"
               />
-              <button 
-                onClick={() => addPea(currentInput)}
-                className="px-6 bg-blue-100 text-blue-700 rounded-2xl font-bold active:scale-95"
-              >
-                เพิ่ม
-              </button>
+              <button onClick={() => addPea(currentInput)} className="px-6 bg-blue-100 text-blue-700 rounded-2xl font-bold active:scale-95">เพิ่ม</button>
             </div>
 
             <button 
@@ -175,14 +190,25 @@ const handleSubmit = async () => {
           </div>
         </div>
 
-        {/* ปุ่มบันทึก */}
-        <button 
-          onClick={handleSubmit} 
-          disabled={isSubmitting || peaList.length === 0}
-          className={`w-full py-6 rounded-[2rem] text-xl font-black shadow-lg transition-all ${isSubmitting || peaList.length === 0 ? 'bg-slate-300 text-white shadow-none' : 'bg-blue-600 text-white shadow-blue-200 active:scale-95'}`}
-        >
-          {isSubmitting ? "กำลังบันทึก..." : `💾 บันทึก ${peaList.length} เครื่องลงระบบ`}
-        </button>
+        {/* --- ปุ่มดำเนินการ --- */}
+        <div className="grid grid-cols-1 gap-3">
+          <button 
+            onClick={handleSubmit} 
+            disabled={isSubmitting || peaList.length === 0}
+            className={`w-full py-5 rounded-[2rem] text-xl font-black shadow-lg transition-all ${isSubmitting || peaList.length === 0 ? 'bg-slate-300 text-white shadow-none' : 'bg-blue-600 text-white shadow-blue-200 active:scale-95'}`}
+          >
+            {isSubmitting ? "กำลังบันทึก..." : `💾 บันทึกเบิก (${peaList.length})`}
+          </button>
+
+          {/* ✅ ปุ่มคืนคลังที่เพิ่มเข้ามาใหม่ */}
+          <button 
+            onClick={handleReturn} 
+            disabled={isSubmitting || peaList.length === 0}
+            className={`w-full py-5 rounded-[2rem] text-xl font-black shadow-lg transition-all ${isSubmitting || peaList.length === 0 ? 'bg-slate-300 text-white shadow-none' : 'bg-orange-500 text-white shadow-orange-100 active:scale-95'}`}
+          >
+            {isSubmitting ? "กำลังบันทึก..." : `🔄 คืนคลัง (${peaList.length})`}
+          </button>
+        </div>
       </div>
 
       {/* Scanner UI */}
@@ -197,7 +223,6 @@ const handleSubmit = async () => {
                 <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-8 border-l-8 border-white rounded-bl-2xl"></div>
                 <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-8 border-r-8 border-white rounded-br-2xl"></div>
                 <div className="absolute left-0 w-full h-[6px] bg-red-600 shadow-[0_0_20px_2px_#dc2626] animate-scan-line-bold"></div>
-                <div className="w-[95%] h-[2px] bg-red-400/60 shadow-[0_0_8px_#ef4444]"></div>
               </div>
             </div>
             <div className="absolute bottom-10 w-full px-10">

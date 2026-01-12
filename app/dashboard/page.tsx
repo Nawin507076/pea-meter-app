@@ -260,7 +260,19 @@ export default function InventoryDashboard() {
                       <div className="bg-emerald-600 p-6 rounded-[2rem] text-white shadow-lg">
                         <span className="text-[14px] font-black uppercase opacity-70 tracking-widest">พนักงานผู้ปฏิบัติงาน</span>
                         <div className="text-3xl font-black mt-1 leading-tight">{item.history.worker}</div>
+                        <div className="flex items-center gap-2 mt-3">
+  <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl shadow-sm">
+    <span className="text-slate-400 text-xs">📅</span>
+    <span className="text-[11px] font-black uppercase tracking-tight text-slate-500">
+      วันที่ปฏิบัติงาน: 
+    </span>
+    <span className="text-[13px] font-black text-slate-700">
+      {item.date}
+    </span>
+  </div>
+</div>
                       </div>
+
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-3 text-center">
@@ -268,14 +280,16 @@ export default function InventoryDashboard() {
                               <img src={getImageUrl(item.history.photoOld)} alt="Old" className="w-full h-full object-cover" />
                               <div className="absolute top-2 left-2 bg-red-500 text-[9px] text-white font-black px-2 py-1 rounded-lg uppercase">เก่า</div>
                            </div>
-                           <div className="bg-red-50 p-2 rounded-xl text-xs font-bold text-red-700">เลข: {item.history.peaOld}</div>
+                           <div className="bg-red-50 p-2 rounded-xl text-xs font-bold text-red-700">PEA(เก่า): {item.history.peaOld}</div>
+                           <div className="bg-red-50 p-2 rounded-xl text-xs font-bold text-red-700">หน่วย(เก่า): {item.history.oldUnit}</div>
                         </div>
                         <div className="space-y-3 text-center">
                            <div className="relative aspect-[3/4] rounded-[2rem] overflow-hidden border-2 border-slate-100 shadow-sm bg-slate-100">
                               <img src={getImageUrl(item.history.photoNew)} alt="New" className="w-full h-full object-cover" />
                               <div className="absolute top-2 left-2 bg-emerald-500 text-[9px] text-white font-black px-2 py-1 rounded-lg uppercase">ใหม่</div>
                            </div>
-                           <div className="bg-emerald-50 p-2 rounded-xl text-xs font-bold text-emerald-700">เลข: {item.pea}</div>
+                           <div className="bg-emerald-50 p-2 rounded-xl text-xs font-bold text-emerald-700">PEA(ใหม่): {item.pea}</div>
+                           <div className="bg-emerald-50 p-2 rounded-xl text-xs font-bold text-emerald-700">หน่วย(ใหม่): {item.history.newUnit}</div>
                         </div>
                       </div>
 
@@ -285,6 +299,14 @@ export default function InventoryDashboard() {
                       </div>
 
                       <div className="space-y-3 pt-4 border-t border-slate-100">
+                        <a 
+                          href={`https://www.google.com/maps?q=${item.history.lat},${item.history.lng}`} 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-4 bg-white border-2 border-slate-200 text-slate-500 rounded-2xl text-sm font-bold flex items-center justify-center gap-2"
+                        >
+                          📍 ดูพิกัดแผนที่ Google Maps
+                        </a>
                         <button 
                           onClick={() => handleMarkAsDone(item.pea)}
                           disabled={updateLoading === item.pea}
@@ -299,15 +321,6 @@ export default function InventoryDashboard() {
                             </span>
                           )}
                         </button>
-                        
-                        <a 
-                          href={`https://www.google.com/maps?q=${item.history.lat},${item.history.lng}`} 
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-4 bg-white border-2 border-slate-200 text-slate-500 rounded-2xl text-sm font-bold flex items-center justify-center gap-2"
-                        >
-                          📍 ดูพิกัดแผนที่ Google Maps
-                        </a>
                       </div>
                     </div>
                   )}

@@ -42,129 +42,131 @@ export default function InventoryDashboard() {
   const [loading, setLoading] = useState<boolean>(true);
   const [updateLoading, setUpdateLoading] = useState<string | null>(null); 
   const [staffFilter, setStaffFilter] = useState<string>("all");
-  
-  // ✅ เพิ่ม State สำหรับช่องค้นหา
   const [searchTerm, setSearchTerm] = useState<string>("");
-
-  // ✅ เพิ่ม State สำหรับเปิด/ปิด Dropdown แบบกำหนดเอง
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // ✅ ฟังก์ชันกรองข้อมูล (รวมทั้ง แผนก และ เลข PEA)
-  const filterData = (items: MeterItem[]) => {
-    if (!items) return [];
-    return items.filter((item) => {
-      // 1. กรองแผนก
-      const isTheerapat = item.staff === "นายธีรภัทร์ ขาวหนูนา";
-      const matchStaff = staffFilter === "all" ? true : (staffFilter === "แก้ไฟ" ? isTheerapat : !isTheerapat);
-      
-      // 2. กรองเลข PEA (ค้นหาได้ทั้งเลขใหม่ และเลขเก่าใน history)
-      const matchSearch = item.pea.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (item.history?.peaOld?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
+  // ✅ State สำหรับการแก้ไข
+  const [isEditing, setIsEditing] = useState<string | null>(null); 
+  const [editData, setEditData] = useState<Partial<HistoryDetail & { pea: string }>>({});
+  const [tempPhotos, setTempPhotos] = useState<{ old?: File; new?: File }>({});
 
-      return matchStaff && matchSearch;
-    });
-  };
+  const remarkOptions: string[] = ["ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "ใช้ไฟเกิน(ct ไหม้)","ไม่หมุน","หมุนติดขัด","ฝาครอบแตก","ตราข้างชำรุด","จอไม่แสดงค่า","หมุนขณะไม่มีโหลด","หมุนถอยหลัง","อื่นๆ"];
 
-  const filteredRemainingItems = useMemo(() => filterData(data?.remainingItems || []), [data?.remainingItems, staffFilter, searchTerm]);
-  const filteredInstalledItems = useMemo(() => filterData(data?.installedItems || []), [data?.installedItems, staffFilter, searchTerm]);
+  // ✅ ฟังก์ชันแสดงรูปภาพ (ปรับปรุงใหม่ให้รูปเดิมขึ้นแน่นอน)
+  const getImageUrl = (photoSource: string, type: 'old' | 'new'): string => {
+    // 1. ถ้ามีการเลือกรูปใหม่จากอัลบั้มในโหมดแก้ไข ให้ Preview รูปนั้น
+    if (isEditing) {
+      if (type === 'old' && tempPhotos.old) return URL.createObjectURL(tempPhotos.old);
+      if (type === 'new' && tempPhotos.new) return URL.createObjectURL(tempPhotos.new);
+    }
 
-  const getImageUrl = (photoSource: string): string => {
+    // 2. ถ้าไม่มีการเลือกใหม่ ให้โชว์รูปจากฐานข้อมูล (รองรับทั้ง ID และ URL เต็ม)
     if (!photoSource || photoSource.length < 5) return "https://placehold.co/400x400?text=No+Photo";
+    
+    // ถ้าเป็น Google Drive ID หรือมีคำว่า id= ให้จัด Format สำหรับดึง Thumbnail
     if (photoSource.includes("id=")) {
       const id = photoSource.split("id=")[1].split("&")[0];
       return `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
     }
-    if (!photoSource.includes(".")) return `https://drive.google.com/thumbnail?id=${photoSource}&sz=w1000`;
-    if (photoSource.startsWith("http")) return photoSource;
-    return `https://placehold.co/400x400?text=${encodeURIComponent(photoSource)}`;
+    
+    // ถ้าส่งมาแค่ ID ยาวๆ (ไม่มี http) ให้เติม URL Drive ให้
+    if (!photoSource.startsWith("http")) {
+      return `https://drive.google.com/thumbnail?id=${photoSource}&sz=w1000`;
+    }
+
+    return photoSource; // ถ้าเป็น URL อื่นๆ ให้ส่งกลับไปเลย
+  };
+
+  const startEditing = (item: MeterItem) => {
+    setIsEditing(item.pea);
+    setEditData({
+      pea: item.pea,
+      peaOld: item.history?.peaOld || "",
+      oldUnit: item.history?.oldUnit || "",
+      newUnit: item.history?.newUnit || "",
+      remark: item.history?.remark || remarkOptions[0]
+    });
+    setTempPhotos({});
+  };
+
+  const handleUpdateDetail = async (originalPeaId: string) => {
+    if (!window.confirm("ยืนยันการบันทึกแก้ไขข้อมูลและรูปภาพ?")) return;
+    setUpdateLoading(originalPeaId);
+    
+    const formData = new FormData();
+    formData.append("originalPeaId", originalPeaId);
+    formData.append("pea", editData.pea || "");
+    formData.append("peaOld", editData.peaOld || "");
+    formData.append("oldUnit", editData.oldUnit || "");
+    formData.append("newUnit", editData.newUnit || "");
+    formData.append("remark", editData.remark || "");
+    if (tempPhotos.old) formData.append("photoOldFile", tempPhotos.old);
+    if (tempPhotos.new) formData.append("photoNewFile", tempPhotos.new);
+
+    try {
+      const res = await fetch("/api/inventory/update-detail", { method: "POST", body: formData });
+      if (res.ok) { alert("✅ บันทึกสำเร็จ"); window.location.reload(); }
+      else { alert("❌ บันทึกไม่สำเร็จ"); }
+    } catch (err) { alert("❌ เกิดข้อผิดพลาด"); }
+    finally { setUpdateLoading(null); }
   };
 
   const handleMarkAsDone = async (peaId: string) => {
-    if (!window.confirm(`ยืนยันว่าทำการสับเปลี่ยนเครื่อง ${peaId} ในระบบเรียบร้อยแล้ว?`)) return;
+    if (!window.confirm(`ยืนยันการสับเปลี่ยนเครื่อง ${peaId} ในระบบ?`)) return;
     setUpdateLoading(peaId);
     try {
-      const res = await fetch("/api/updateStatus", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ peaId }), 
-      });
-      const result = await res.json();
-      if (res.ok && result.success) {
-        if (data) {
-          setData({
-            ...data,
-            installedItems: data.installedItems.filter(item => item.pea !== peaId),
-            installedCount: data.installedCount - 1
-          });
-        }
-        setExpandedPea(null);
-        alert("✅ บันทึกสำเร็จ รายการนี้ถูกย้ายไปเก็บประวัติแล้ว");
-      } else {
-        alert(`❌ ผิดพลาด: ${result.error || "ไม่สามารถอัปเดตได้"}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
-    } finally {
-      setUpdateLoading(null);
-    }
+      const res = await fetch("/api/updateStatus", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ peaId }) });
+      if (res.ok) { alert("✅ สำเร็จ"); window.location.reload(); }
+    } catch (err) { console.error(err); }
+    finally { setUpdateLoading(null); }
   };
 
   useEffect(() => {
     async function fetchStats() {
       try {
         const res = await fetch("/api/inventory/stats");
-        const json = (await res.json()) as DashboardData;
+        const json = await res.json();
         if (json.success) setData(json);
-      } catch (err) {
-        console.error("Fetch Error:", err);
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { console.error(err); }
+      finally { setLoading(false); }
     }
     fetchStats();
   }, []);
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="font-black text-slate-500 text-xl animate-pulse">กำลังสรุปยอด...</p>
-      </div>
-    </div>
-  );
+  const filterData = (items: MeterItem[]) => {
+    if (!items) return [];
+    return items.filter((item) => {
+      const isTheerapat = item.staff === "นายธีรภัทร์ ขาวหนูนา" || item.history?.worker === "นายธีรภัทร์ ขาวหนูนา";
+      const matchStaff = staffFilter === "all" ? true : (staffFilter === "แก้ไฟ" ? isTheerapat : !isTheerapat);
+      const matchSearch = item.pea.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (item.history?.peaOld?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
+      return matchStaff && matchSearch;
+    });
+  };
+
+  const filteredRemainingItems = useMemo(() => filterData(data?.remainingItems || []), [data, staffFilter, searchTerm]);
+  const filteredInstalledItems = useMemo(() => filterData(data?.installedItems || []), [data, staffFilter, searchTerm]);
+
+  if (loading) return <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center font-black text-xl animate-pulse">กำลังสรุปยอด...</div>;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-4 font-sans pb-32 overflow-x-hidden text-slate-900">
+    <div className="min-h-screen bg-[#f8fafc] p-4 font-sans pb-32 text-slate-900 overflow-x-hidden">
       <div className="max-w-md mx-auto space-y-6 mt-6">
         
-        <header className="text-center space-y-2">
-          <div className="w-full max-w-md mb-4 flex justify-between">
-            <Link href="/" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm active:scale-95 transition-all">กลับ</Link>
-            <Link href="/inventory/history" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-blue-600 font-black text-sm active:scale-95 transition-all">รายการที่สับเปลี่ยนแล้ว</Link>
-          </div>
-          <h1 className="text-4xl font-black text-slate-800 tracking-tight italic">📊 DASHBOARD</h1>
+        <header className="flex justify-between items-center">
+          <Link href="/" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm active:scale-95">กลับ</Link>
+          <h1 className="text-3xl font-black italic">📊 DASHBOARD</h1>
+          <Link href="/inventory/history" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-blue-600 font-black text-sm active:scale-95">ประวัติ</Link>
         </header>
 
         <div className="grid grid-cols-2 gap-4">
-          <button 
-            onClick={() => { setViewMode("remaining"); setExpandedPea(null); setSearchTerm(""); }}
-            className={`p-6 rounded-[2.5rem] shadow-xl transition-all duration-300 border-4 ${
-              viewMode === "remaining" ? "bg-blue-600 text-white border-blue-200 scale-105" : "bg-white text-blue-600 border-white"
-            }`}
-          >
-            <span className="text-[12px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">เบิกออกไปใช้งาน</span>
-            <div className="text-5xl font-black text-center">{filteredRemainingItems.length}</div>
+          <button onClick={() => { setViewMode("remaining"); setExpandedPea(null); setIsEditing(null); }} className={`p-6 rounded-[2.5rem] shadow-xl border-4 transition-all ${viewMode === "remaining" ? "bg-blue-600 text-white border-blue-200" : "bg-white text-blue-600 border-white"}`}>
+            <span className="text-[10px] font-black uppercase block opacity-70">เบิกใช้งาน</span>
+            <div className="text-4xl font-black text-center">{filteredRemainingItems.length}</div>
           </button>
-
-          <button 
-            onClick={() => { setViewMode("installed"); setExpandedPea(null); setSearchTerm(""); }}
-            className={`p-6 rounded-[2.5rem] shadow-xl transition-all duration-300 border-4 ${
-              viewMode === "installed" ? "bg-emerald-600 text-white border-emerald-200 scale-105" : "bg-white text-emerald-600 border-white"
-            }`}
-          >
-            <span className="text-[12px] font-black opacity-80 block mb-1 uppercase tracking-widest text-center">งานรอคีย์เข้าระบบ</span>
-            <div className="text-5xl font-black text-center">{filteredInstalledItems.length}</div>
+          <button onClick={() => { setViewMode("installed"); setExpandedPea(null); setIsEditing(null); }} className={`p-6 rounded-[2.5rem] shadow-xl border-4 transition-all ${viewMode === "installed" ? "bg-emerald-600 text-white border-emerald-200" : "bg-white text-emerald-600 border-white"}`}>
+            <span className="text-[10px] font-black uppercase block opacity-70">งานรอคีย์</span>
+            <div className="text-4xl font-black text-center">{filteredInstalledItems.length}</div>
           </button>
         </div>
 
@@ -172,177 +174,133 @@ export default function InventoryDashboard() {
           <div className="space-y-4">
             <div className="flex flex-col gap-3">
               <div className="flex justify-between items-center px-2">
-                <h3 className="text-xl font-black text-slate-800">
-                  {viewMode === "remaining" ? "📦 รายการในคลัง" : "📜 งานรอคีย์"}
-                </h3>
-                
+                <h3 className="text-xl font-black">{viewMode === "remaining" ? "📦 ในคลัง" : "📜 งานรอคีย์"}</h3>
                 <div className="relative">
-                  <button 
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className="bg-white border-2 border-orange-200 rounded-2xl pl-4 pr-3 py-2 font-black text-sm text-slate-700 shadow-sm flex items-center gap-2 active:scale-95 transition-all"
-                  >
-                    <span>
-                      {staffFilter === "all" ? "🔍 ทั้งหมด" : staffFilter === "แก้ไฟ" ? "⚡ แก้ไฟ" : "🛠️ บริการ"}
-                    </span>
-                    <span className="text-slate-400 text-[10px] transform transition-transform duration-200" style={{ transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                      ▼
-                    </span>
+                  <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="bg-white border-2 border-orange-200 rounded-2xl pl-4 pr-3 py-2 font-black text-sm text-slate-700 shadow-sm flex items-center gap-2">
+                    {staffFilter === "all" ? "🔍 ทั้งหมด" : staffFilter === "แก้ไฟ" ? "⚡ แก้ไฟ" : "🛠️ บริการ"} <span>▼</span>
                   </button>
-
                   {isDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)}></div>
-                      <div className="absolute right-0 mt-2 w-40 bg-white border-2 border-slate-100 rounded-2xl shadow-2xl z-20 overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="flex flex-col">
-                          <button className="px-4 py-4 text-left font-black text-lg hover:bg-slate-50 border-b border-slate-50" onClick={() => { setStaffFilter("all"); setIsDropdownOpen(false); }}>🔍 ทั้งหมด</button>
-                          <button className="px-4 py-4 text-left font-black text-lg hover:bg-orange-50 border-b border-slate-50 text-orange-600" onClick={() => { setStaffFilter("แก้ไฟ"); setIsDropdownOpen(false); }}>⚡ แก้ไฟ</button>
-                          <button className="px-4 py-4 text-left font-black text-lg hover:bg-blue-50 text-blue-600" onClick={() => { setStaffFilter("บริการ"); setIsDropdownOpen(false); }}>🛠️ บริการ</button>
-                        </div>
+                      <div className="absolute right-0 mt-2 w-40 bg-white border-2 rounded-2xl shadow-2xl z-20 overflow-hidden">
+                        <button className="w-full p-4 text-left font-black hover:bg-slate-50 border-b" onClick={() => { setStaffFilter("all"); setIsDropdownOpen(false); }}>🔍 ทั้งหมด</button>
+                        <button className="w-full p-4 text-left font-black hover:bg-orange-50 border-b text-orange-600" onClick={() => { setStaffFilter("แก้ไฟ"); setIsDropdownOpen(false); }}>⚡ แก้ไฟ</button>
+                        <button className="w-full p-4 text-left font-black hover:bg-blue-50 text-blue-600" onClick={() => { setStaffFilter("บริการ"); setIsDropdownOpen(false); }}>🛠️ บริการ</button>
                       </div>
                     </>
                   )}
                 </div>
               </div>
-
-              {/* ✅ ช่องค้นหา (Search Bar) */}
-              <div className="px-2">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="🔍 ค้นหาเลข PEA..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-blue-500 shadow-sm transition-all"
-                  />
-                  {searchTerm && (
-                    <button 
-                      onClick={() => setSearchTerm("")}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold hover:text-slate-600"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
+              <input type="text" placeholder="🔍 ค้นหาเลข PEA..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none" />
             </div>
 
             <div className="space-y-4">
               {(viewMode === "remaining" ? filteredRemainingItems : filteredInstalledItems).map((item) => (
-                <div 
-                  key={item.pea} 
-                  className={`bg-white rounded-[2.5rem] shadow-md border-2 transition-all overflow-hidden ${
-                    expandedPea === item.pea ? "border-emerald-500 ring-4 ring-emerald-50 shadow-emerald-100" : "border-slate-50"
-                  }`}
-                >
-                  <div 
-                    onClick={() => viewMode === "installed" && setExpandedPea(expandedPea === item.pea ? null : item.pea)}
-                    className={`p-6 flex justify-between items-center ${viewMode === "installed" ? "cursor-pointer active:bg-slate-50" : ""}`}
-                  >
+                <div key={item.pea} className={`bg-white rounded-[2.5rem] shadow-md border-2 overflow-hidden ${expandedPea === item.pea ? "border-emerald-500 ring-4 ring-emerald-50" : "border-slate-50"}`}>
+                  <div onClick={() => viewMode === "installed" && setExpandedPea(expandedPea === item.pea ? null : item.pea)} className={`p-6 flex justify-between items-center ${viewMode === "installed" ? "cursor-pointer active:bg-slate-50" : ""}`}>
                     <div className="flex items-center gap-4">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${viewMode === "remaining" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}>
-                        {viewMode === "remaining" ? "📦" : "✅"}
-                      </div>
-                      <div>
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${viewMode === "remaining" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}>{viewMode === "remaining" ? "📦" : "✅"}</div>
+                      <div className="flex flex-col">
                         <div className="text-2xl font-black text-slate-800 tracking-tighter leading-none">{item.pea}</div>
-                        <div className="text-[14px] font-bold text-slate-400 uppercase mt-2">เบิกโดย: {item.staff}</div>
+                        <div className="text-[13px] font-bold text-slate-400 mt-2">พนักงาน: {item.staff}</div>
                       </div>
                     </div>
-                    {viewMode === "installed" && (
-                      <div className={`transition-transform duration-300 ${expandedPea === item.pea ? "rotate-180 text-emerald-500" : "text-slate-300"}`}>
-                         <span className="text-xl font-bold">▼</span>
-                      </div>
-                    )}
                   </div>
 
                   {expandedPea === item.pea && item.history && (
                     <div className="px-6 pb-8 space-y-6">
                       <div className="h-px bg-slate-100 w-full mb-2"></div>
-                      <div className="bg-emerald-600 p-6 rounded-[2rem] text-white shadow-lg">
-                        <span className="text-[14px] font-black uppercase opacity-70 tracking-widest">พนักงานผู้ปฏิบัติงาน</span>
-                        <div className="text-3xl font-black mt-1 leading-tight">{item.history.worker}</div>
-                        <div className="flex items-center gap-2 mt-3">
-  <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl shadow-sm">
-    <span className="text-slate-400 text-xs">📅</span>
-    <span className="text-[11px] font-black uppercase tracking-tight text-slate-500">
-      วันที่ปฏิบัติงาน: 
-    </span>
-    <span className="text-[13px] font-black text-slate-700">
-      {item.date}
-    </span>
-  </div>
-</div>
+                      
+                      <div className="bg-emerald-600 p-6 rounded-[2rem] text-white shadow-lg relative">
+                        <span className="text-[12px] font-black uppercase opacity-70">พนักงานผู้ติดตั้ง</span>
+                        <div className="text-2xl font-black mt-1 leading-tight">{item.history.worker}</div>
+                        <div className="mt-3 bg-white/20 px-3 py-1.5 rounded-xl w-fit text-[11px] font-black italic">📅 วันที่/เวลา: {item.date}</div>
+                        
+                        <div className="absolute top-4 right-4 flex flex-col gap-2">
+                           <button onClick={(e) => { e.stopPropagation(); isEditing === item.pea ? handleUpdateDetail(item.pea) : startEditing(item); }} className="bg-white text-emerald-700 px-4 py-2 rounded-xl text-xs font-black shadow-md">
+                             {isEditing === item.pea ? "💾 บันทึก" : "📝 แก้ไข"}
+                           </button>
+                           {isEditing === item.pea && (
+                             <button onClick={(e) => { e.stopPropagation(); setIsEditing(null); }} className="bg-red-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md">ยกเลิก</button>
+                           )}
+                        </div>
                       </div>
 
-                      
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-3 text-center">
-                           <div className="relative aspect-[3/4] rounded-[2rem] overflow-hidden border-2 border-slate-100 shadow-sm bg-slate-100">
-                              <img src={getImageUrl(item.history.photoOld)} alt="Old" className="w-full h-full object-cover" />
-                              <div className="absolute top-2 left-2 bg-red-500 text-[9px] text-white font-black px-2 py-1 rounded-lg uppercase">เก่า</div>
+                        <div className="space-y-3">
+                           <div className="relative aspect-[3/4] rounded-[2rem] overflow-hidden border-2 border-slate-100 bg-slate-100 shadow-sm">
+                              <img src={getImageUrl(item.history.photoOld, 'old')} className="w-full h-full object-cover" />
+                              <div className="absolute top-2 left-2 bg-red-500 text-[9px] text-white font-black px-2 py-1 rounded-lg">เก่า</div>
+                              {isEditing === item.pea && (
+                                <label className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center cursor-pointer">
+                                  <span className="text-white text-[10px] font-black text-center">📷 เลือกรูปเก่าใหม่</span>
+                                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setTempPhotos({...tempPhotos, old: e.target.files?.[0]})} />
+                                </label>
+                              )}
                            </div>
-                           <div className="bg-red-50 p-2 rounded-xl text-xs font-bold text-red-700">PEA(เก่า): {item.history.peaOld}</div>
-                           <div className="bg-red-50 p-2 rounded-xl text-xs font-bold text-red-700">หน่วย(เก่า): {item.history.oldUnit}</div>
+                           {isEditing === item.pea ? (
+                             <div className="space-y-1">
+                               <input type="text" value={editData.peaOld} onChange={(e)=>setEditData({...editData, peaOld: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded-xl text-[10px] font-bold" placeholder="PEA เก่า" />
+                               <input type="number" value={editData.oldUnit} onChange={(e)=>setEditData({...editData, oldUnit: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded-xl text-[10px] font-bold" placeholder="หน่วยเก่า" />
+                             </div>
+                           ) : (
+                             <div className="text-center">
+                               <div className="bg-red-50 p-2 rounded-xl text-[10px] font-bold text-red-700">PEA: {item.history.peaOld}</div>
+                               <div className="bg-red-50 p-2 rounded-xl text-[10px] font-bold text-red-700 mt-1">หน่วย: {item.history.oldUnit}</div>
+                             </div>
+                           )}
                         </div>
-                        <div className="space-y-3 text-center">
-                           <div className="relative aspect-[3/4] rounded-[2rem] overflow-hidden border-2 border-slate-100 shadow-sm bg-slate-100">
-                              <img src={getImageUrl(item.history.photoNew)} alt="New" className="w-full h-full object-cover" />
-                              <div className="absolute top-2 left-2 bg-emerald-500 text-[9px] text-white font-black px-2 py-1 rounded-lg uppercase">ใหม่</div>
+
+                        <div className="space-y-3">
+                           <div className="relative aspect-[3/4] rounded-[2rem] overflow-hidden border-2 border-slate-100 bg-slate-100 shadow-sm">
+                              <img src={getImageUrl(item.history.photoNew, 'new')} className="w-full h-full object-cover" />
+                              <div className="absolute top-2 left-2 bg-emerald-500 text-[9px] text-white font-black px-2 py-1 rounded-lg">ใหม่</div>
+                              {isEditing === item.pea && (
+                                <label className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center cursor-pointer">
+                                  <span className="text-white text-[10px] font-black text-center">📸 เลือกรูปใหม่ใหม่</span>
+                                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setTempPhotos({...tempPhotos, new: e.target.files?.[0]})} />
+                                </label>
+                              )}
                            </div>
-                           <div className="bg-emerald-50 p-2 rounded-xl text-xs font-bold text-emerald-700">PEA(ใหม่): {item.pea}</div>
-                           <div className="bg-emerald-50 p-2 rounded-xl text-xs font-bold text-emerald-700">หน่วย(ใหม่): {item.history.newUnit}</div>
+                           {isEditing === item.pea ? (
+                             <div className="space-y-1">
+                               <input type="text" value={editData.pea} onChange={(e)=>setEditData({...editData, pea: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded-xl text-[10px] font-bold" placeholder="PEA ใหม่" />
+                               <input type="number" value={editData.newUnit} onChange={(e)=>setEditData({...editData, newUnit: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded-xl text-[10px] font-bold" placeholder="หน่วยใหม่" />
+                             </div>
+                           ) : (
+                             <div className="text-center">
+                               <div className="bg-emerald-50 p-2 rounded-xl text-[10px] font-bold text-emerald-700">PEA: {item.pea}</div>
+                               <div className="bg-emerald-50 p-2 rounded-xl text-[10px] font-bold text-emerald-700 mt-1">หน่วย: {item.history.newUnit}</div>
+                             </div>
+                           )}
                         </div>
                       </div>
 
                       <div className="bg-slate-50 p-6 rounded-[2rem] border-2 border-slate-100 shadow-inner">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">บันทึกเหตุผลการสับเปลี่ยน</span>
-                        <div className="text-2xl font-bold text-slate-700 leading-tight italic">{item.history.remark || "ไม่มีการบันทึก"}</div>
+                        <span className="text-[10px] font-black text-slate-400 block mb-2 uppercase italic">เหตุผลการสับเปลี่ยน</span>
+                        {isEditing === item.pea ? (
+                          <select value={editData.remark} onChange={(e)=>setEditData({...editData, remark: e.target.value})} className="w-full p-4 bg-white border-2 border-blue-200 rounded-2xl font-bold">
+                            {remarkOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        ) : (
+                          <div className="text-xl font-bold text-slate-700 italic">{item.history.remark || "ไม่มีบันทึก"}</div>
+                        )}
                       </div>
 
-                      <div className="space-y-3 pt-4 border-t border-slate-100">
-                        <a 
-                          href={`https://www.google.com/maps?q=${item.history.lat},${item.history.lng}`} 
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-4 bg-white border-2 border-slate-200 text-slate-500 rounded-2xl text-sm font-bold flex items-center justify-center gap-2"
-                        >
-                          📍 ดูพิกัดแผนที่ Google Maps
-                        </a>
-                        <button 
-                          onClick={() => handleMarkAsDone(item.pea)}
-                          disabled={updateLoading === item.pea}
-                          className={`w-full py-6 rounded-[2.5rem] text-xl font-black flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl ${
-                            updateLoading === item.pea ? "bg-slate-200 text-slate-400" : "bg-blue-600 text-white shadow-blue-200"
-                          }`}
-                        >
-                          {updateLoading === item.pea ? "⏳ กำลังบันทึก..." : (
-                            <span className="flex flex-col leading-tight text-center">
-                              <span>✅ สับเปลี่ยนในระบบแล้ว</span>
-                              <span className="text-[16px] opacity-70">(พี่ดำคนเดียว)</span>
-                            </span>
-                          )}
+                      <div className="pt-4 border-t border-slate-100">
+                        <button onClick={() => handleMarkAsDone(item.pea)} disabled={updateLoading === item.pea || isEditing === item.pea} className={`w-full py-6 rounded-[2.5rem] text-xl font-black shadow-xl transition-all ${updateLoading === item.pea || isEditing === item.pea ? "bg-slate-200 text-slate-400" : "bg-blue-600 text-white active:scale-95 shadow-blue-200"}`}>
+                           {updateLoading === item.pea ? "⏳ กำลังบันทึก..." : "✅ สับเปลี่ยนในระบบแล้ว"}
                         </button>
                       </div>
                     </div>
                   )}
                 </div>
               ))}
-              
-              {(viewMode === "remaining" ? filteredRemainingItems : filteredInstalledItems).length === 0 && (
-                <div className="text-center py-12 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200">
-                  <div className="text-4xl mb-2">🔍</div>
-                  <div className="text-slate-400 font-bold">ไม่พบรายการที่ค้นหา</div>
-                </div>
-              )}
             </div>
           </div>
         )}
-
-        <button 
-          onClick={() => window.location.href = "/inventory/add"}
-          className="w-full py-6 bg-slate-900 text-white rounded-[2.5rem] text-xl font-black shadow-2xl active:scale-95 transition-all mt-8"
-        >
-          ➕ บันทึกรับพัสดุเข้าคลัง
-        </button>
+        
+        <button onClick={() => window.location.href = "/inventory/add"} className="w-full py-6 bg-slate-900 text-white rounded-[2.5rem] text-xl font-black shadow-2xl active:scale-95 transition-all mt-8">➕ บันทึกรับพัสดุเข้าคลัง</button>
       </div>
     </div>
   );

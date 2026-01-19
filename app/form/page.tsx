@@ -63,7 +63,7 @@ export default function MultiStepMeterForm() {
     target: "old" 
   });
 
-  const remarkOptions: string[] = ["ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "ใช้ไฟเกิน(ct ไหม้)", "อื่นๆ"];
+  const remarkOptions: string[] = ["ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "ใช้ไฟเกิน(ct ไหม้)","ไม่หมุน","หมุนติดขัด","ฝาครอบแตก","ตราข้างชำรุด","จอไม่แสดงค่า","หมุนขณะไม่มีโหลด","หมุนถอยหลัง","อื่นๆ"];
 
   // --- 2. ฟังก์ชันบีบอัดรูปภาพ ---
   const compressImage = async (file: File): Promise<Blob> => {

@@ -53,6 +53,7 @@ export default function MultiStepMeterForm() {
   const [newUnit, setNewUnit] = useState("");
   const [photoNew, setPhotoNew] = useState<File | null>(null);
   const [remark, setRemark] = useState("ไหม้ทั้งเครื่อง");
+  const [remarkDetails, setRemarkDetails] = useState("");
   const [location, setLocation] = useState({ lat: "", lng: "" });
   
   const [step, setStep] = useState(1);
@@ -63,7 +64,7 @@ export default function MultiStepMeterForm() {
     target: "old" 
   });
 
-  const remarkOptions: string[] = ["ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "ใช้ไฟเกิน(ct ไหม้)","ไม่หมุน","หมุนติดขัด","ฝาครอบแตก","ตราข้างชำรุด","จอไม่แสดงค่า","หมุนขณะไม่มีโหลด","หมุนถอยหลัง","อื่นๆ"];
+  const remarkOptions: string[] = ["ปกติ","ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "ใช้ไฟเกิน(ct ไหม้)","ไม่หมุน","หมุนติดขัด","ฝาครอบแตก","ตราข้างชำรุด","จอไม่แสดงค่า","หมุนขณะไม่มีโหลด","หมุนถอยหลัง","อื่นๆ"];
 
   // --- 2. ฟังก์ชันบีบอัดรูปภาพ ---
   const compressImage = async (file: File): Promise<Blob> => {
@@ -194,7 +195,7 @@ const getCurrentLocation = useCallback(() => {
   const handleBack = () => step === 1 ? router.push("/") : setStep(s => s - 1);
 
   const handleSave = async () => {
-    if (!workerInfo || isSubmitting) return;
+if (!workerInfo || isSubmitting) return;
     setIsSubmitting(true);
 
     try {
@@ -205,7 +206,10 @@ const getCurrentLocation = useCallback(() => {
       formData.append("oldUnit", oldUnit);
       formData.append("peaNew", peaNew);
       formData.append("newUnit", newUnit);
-      formData.append("remark", remark);
+      const finalRemark = remark === "ปกติ" && remarkDetails 
+        ? `ปกติ: ${remarkDetails}` 
+        : remark;
+      formData.append("remark", finalRemark);
       formData.append("lat", location.lat);
       formData.append("lng", location.lng);
       formData.append("timestamp", new Date().toLocaleString("th-TH"));
@@ -342,7 +346,7 @@ const getCurrentLocation = useCallback(() => {
                 <PhotoUpload label="ถ่ายรูปมิเตอร์ใหม่" photo={photoNew} onPhotoChange={setPhotoNew} />
               </>
             )}
-            {step === 3 && (
+{step === 3 && (
               <div className="space-y-8">
                 <button onClick={getCurrentLocation} className="w-full py-6 bg-blue-600 text-white rounded-[2rem] text-xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-all">
                   📍 {location.lat ? "อัปเดตพิกัดแล้ว" : "เช็คอินพิกัด GPS"}
@@ -350,13 +354,30 @@ const getCurrentLocation = useCallback(() => {
                 <div className="space-y-3">
                   <label className="text-lg font-black text-slate-700 ml-2 block">สาเหตุการเปลี่ยน</label>
                   <div className="relative">
-                    <select value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-5 bg-[#f8fafc] border border-slate-100 rounded-[2rem] text-xl font-bold text-slate-800 appearance-none outline-none focus:border-blue-400 shadow-inner">
+                    <select 
+                      value={remark} 
+                      onChange={(e) => setRemark(e.target.value)} 
+                      className="w-full p-5 bg-[#f8fafc] border border-slate-100 rounded-[2rem] text-xl font-bold text-slate-800 appearance-none outline-none focus:border-blue-400 shadow-inner"
+                    >
                       {remarkOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                     <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                     </div>
                   </div>
+
+                  {/* 3. ส่วนที่เพิ่ม: แสดง Textarea เมื่อเลือก "ปกติ" */}
+                  {remark === "ปกติ" && (
+                    <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <textarea
+                        value={remarkDetails}
+                        onChange={(e) => setRemarkDetails(e.target.value)}
+                        placeholder="กรอกรายละเอียดเพิ่มเติม..."
+                        className="w-full p-5 bg-white border-2 border-blue-100 rounded-3xl font-bold text-lg text-slate-700 outline-none focus:border-blue-400 shadow-sm"
+                        rows={3}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}

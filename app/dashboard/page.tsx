@@ -155,17 +155,20 @@ export default function InventoryDashboard() {
         
         <header className="flex justify-between items-center">
           <Link href="/" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm active:scale-95">กลับ</Link>
-          <h1 className="text-3xl font-black italic">📊 DASHBOARD</h1>
-          <Link href="/inventory/history" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-blue-600 font-black text-sm active:scale-95">ประวัติ</Link>
+          
+          <Link href="/inventory/history" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-blue-600 font-black text-sm active:scale-95">ประวัติสับเปลี่ยน</Link>
         </header>
+        <div className="flex justify-center items-center">
+<h1 className="text-3xl font-black italic">📊 DASHBOARD</h1>
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
           <button onClick={() => { setViewMode("remaining"); setExpandedPea(null); setIsEditing(null); }} className={`p-6 rounded-[2.5rem] shadow-xl border-4 transition-all ${viewMode === "remaining" ? "bg-blue-600 text-white border-blue-200" : "bg-white text-blue-600 border-white"}`}>
-            <span className="text-[10px] font-black uppercase block opacity-70">เบิกใช้งาน</span>
+            <span className="text-[12px] font-black uppercase block opacity-70">เบิกใช้งาน</span>
             <div className="text-4xl font-black text-center">{filteredRemainingItems.length}</div>
           </button>
           <button onClick={() => { setViewMode("installed"); setExpandedPea(null); setIsEditing(null); }} className={`p-6 rounded-[2.5rem] shadow-xl border-4 transition-all ${viewMode === "installed" ? "bg-emerald-600 text-white border-emerald-200" : "bg-white text-emerald-600 border-white"}`}>
-            <span className="text-[10px] font-black uppercase block opacity-70">งานรอคีย์</span>
+            <span className="text-[12px] font-black uppercase block opacity-70">เปลี่ยนหน้างานแล้ว</span>
             <div className="text-4xl font-black text-center">{filteredInstalledItems.length}</div>
           </button>
         </div>
@@ -174,7 +177,7 @@ export default function InventoryDashboard() {
           <div className="space-y-4">
             <div className="flex flex-col gap-3">
               <div className="flex justify-between items-center px-2">
-                <h3 className="text-xl font-black">{viewMode === "remaining" ? "📦 ในคลัง" : "📜 งานรอคีย์"}</h3>
+                <h3 className="text-xl font-black">{viewMode === "remaining" ? "📦 เบิกใช้งาน" : "📜 รอเปลี่ยนในระบบ"}</h3>
                 <div className="relative">
                   <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="bg-white border-2 border-orange-200 rounded-2xl pl-4 pr-3 py-2 font-black text-sm text-slate-700 shadow-sm flex items-center gap-2">
                     {staffFilter === "all" ? "🔍 ทั้งหมด" : staffFilter === "แก้ไฟ" ? "⚡ แก้ไฟ" : "🛠️ บริการ"} <span>▼</span>
@@ -240,13 +243,13 @@ export default function InventoryDashboard() {
                            </div>
                            {isEditing === item.pea ? (
                              <div className="space-y-1">
-                               <input type="text" value={editData.peaOld} onChange={(e)=>setEditData({...editData, peaOld: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded-xl text-[10px] font-bold" placeholder="PEA เก่า" />
-                               <input type="number" value={editData.oldUnit} onChange={(e)=>setEditData({...editData, oldUnit: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded-xl text-[10px] font-bold" placeholder="หน่วยเก่า" />
+                               <input type="text" value={editData.peaOld} onChange={(e)=>setEditData({...editData, peaOld: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded-xl text-[12px] font-bold" placeholder="PEA เก่า" />
+                               <input type="number" value={editData.oldUnit} onChange={(e)=>setEditData({...editData, oldUnit: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded-xl text-[12px] font-bold" placeholder="หน่วยเก่า" />
                              </div>
                            ) : (
                              <div className="text-center">
-                               <div className="bg-red-50 p-2 rounded-xl text-[10px] font-bold text-red-700">PEA: {item.history.peaOld}</div>
-                               <div className="bg-red-50 p-2 rounded-xl text-[10px] font-bold text-red-700 mt-1">หน่วย: {item.history.oldUnit}</div>
+                               <div className="bg-red-50 p-2 rounded-xl text-[12px] font-bold text-red-700">PEA: {item.history.peaOld}</div>
+                               <div className="bg-red-50 p-2 rounded-xl text-[12px] font-bold text-red-700 mt-1">หน่วย: {item.history.oldUnit}</div>
                              </div>
                            )}
                         </div>
@@ -269,8 +272,8 @@ export default function InventoryDashboard() {
                              </div>
                            ) : (
                              <div className="text-center">
-                               <div className="bg-emerald-50 p-2 rounded-xl text-[10px] font-bold text-emerald-700">PEA: {item.pea}</div>
-                               <div className="bg-emerald-50 p-2 rounded-xl text-[10px] font-bold text-emerald-700 mt-1">หน่วย: {item.history.newUnit}</div>
+                               <div className="bg-emerald-50 p-2 rounded-xl text-[12px] font-bold text-emerald-700">PEA: {item.pea}</div>
+                               <div className="bg-emerald-50 p-2 rounded-xl text-[12px] font-bold text-emerald-700 mt-1">หน่วย: {item.history.newUnit}</div>
                              </div>
                            )}
                         </div>

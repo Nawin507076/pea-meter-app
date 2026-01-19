@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BrowserMultiFormatReader } from "@zxing/library";
+import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/library";
 import Link from "next/link";
 
 export default function AddInventory() {
@@ -32,33 +32,63 @@ export default function AddInventory() {
       setIsScanning(false);
       return;
     }
-    const cleanCode = code.trim().replace(/[^0-9]/g, "");
-    if (cleanCode) {
+    const cleanCode = code.trim().replace(/\D/g, ""); // กรองเฉพาะตัวเลข
+    if (cleanCode && cleanCode.length >= 9) {
       if (peaList.includes(cleanCode)) {
         alert("เลขนี้ถูกเพิ่มไปแล้วครับ");
       } else {
         setPeaList([...peaList, cleanCode]);
-        if (navigator.vibrate) navigator.vibrate(100);
+        if (typeof window !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(100);
+        }
       }
     }
     setCurrentInput("");
   };
 
+  // --- ส่วนการสแกนบาร์โค้ดที่ปรับปรุงใหม่ ---
   useEffect(() => {
-    let reader: BrowserMultiFormatReader | null = null;
+    let codeReader: BrowserMultiFormatReader | null = null;
+
     if (isScanning && videoRef.current) {
-      reader = new BrowserMultiFormatReader();
-      reader.decodeFromConstraints({ video: { facingMode: "environment" } }, videoRef.current, (result) => {
-        if (result) {
-          addPea(result.getText());
-          setIsScanning(false); 
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      hints.set(DecodeHintType.PURE_BARCODE, false);
+
+      codeReader = new BrowserMultiFormatReader(hints, 300);
+
+      const videoConstraints: MediaTrackConstraints = {
+        facingMode: "environment",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
+
+      codeReader.decodeFromConstraints(
+        { video: videoConstraints },
+        videoRef.current,
+        (result) => {
+          if (result) {
+            const text = result.getText().replace(/\D/g, "");
+            if (text.length >= 9) {
+              addPea(text);
+              setIsScanning(false); // ปิดกล้องหลังสแกนติด 1 เครื่อง (หรือจะเปิดค้างไว้ก็ได้ตามต้องการ)
+            }
+          }
         }
+      ).catch((err) => {
+        console.error("Camera access error:", err);
       });
     }
-    return () => reader?.reset();
+
+    return () => {
+      if (codeReader) {
+        codeReader.reset();
+      }
+    };
   }, [isScanning]);
 
-  // --- ฟังก์ชันยืนยันรหัสผ่านร่วมกัน ---
+  // --- ฟังก์ชันยืนยันรหัสผ่าน ---
   const verifyAdmin = () => {
     const confirmCheck = window.confirm("⚠️ กรุณาตรวจสอบหมายเลข PEA ให้ถูกต้องก่อนกดบันทึกข้อมูล\n\nกด 'ตกลง' หากตรวจสอบเรียบร้อยแล้ว");
     if (!confirmCheck) return false;
@@ -72,7 +102,6 @@ export default function AddInventory() {
     return true;
   };
 
-  // 1. ฟังก์ชันเบิกมิเตอร์ (เดิม)
   const handleSubmit = async () => {
     if (!staffName || peaList.length === 0) return alert("กรุณาระบุชื่อคนเบิกและระบุมิเตอร์อย่างน้อย 1 เครื่อง");
     if (!verifyAdmin()) return;
@@ -95,8 +124,6 @@ export default function AddInventory() {
     }
   };
 
-  // 2. ✅ ฟังก์ชันคืนคลัง (ใหม่)
-// 2. ✅ ฟังก์ชันคืนคลัง (แก้ไขการแสดง Error)
   const handleReturn = async () => {
     if (peaList.length === 0) return alert("กรุณาระบุมิเตอร์อย่างน้อย 1 เครื่องเพื่อคืนคลัง");
     if (!verifyAdmin()) return;
@@ -109,14 +136,12 @@ export default function AddInventory() {
         body: JSON.stringify({ items: peaList, staffName, status: 'back' }),
       });
 
-      // ดึงข้อมูล Json จาก API มาดูว่าสำเร็จหรือติด Error อะไร
       const result = await res.json();
 
       if (res.ok) {
         alert("บันทึกรายการคืนคลังสำเร็จ ✅");
         router.push("/dashboard");
       } else {
-        // ✅ แก้ไขตรงนี้: ให้แสดงข้อความ Error ที่ส่งมาจาก API (เช่น ติด 'yes' หรือหาไม่เจอ)
         alert(result.error || "เกิดข้อผิดพลาดในการคืนคลัง");
       }
     } catch (err) {
@@ -129,6 +154,7 @@ export default function AddInventory() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans pb-20">
       <div className="max-w-md mx-auto space-y-6">
+        {/* Header */}
         <div className="w-full max-w-md mb-4 relative flex items-center">
           <Link href="/dashboard" className="bg-white px-5 py-3 rounded-2xl shadow-sm border border-slate-200 text-red-600 font-black text-sm flex items-center gap-2 active:scale-95 transition-all">
             กลับ
@@ -136,6 +162,7 @@ export default function AddInventory() {
           <h1 className="text-3xl font-black text-blue-700 tracking-tight ml-4">📦 จัดการมิเตอร์</h1>
         </div>
         
+        {/* Staff Selection */}
         <div className="bg-white p-6 rounded-[2rem] shadow-xl space-y-4">
           <label className="block text-sm font-bold text-slate-500 ml-2">ชื่อพนักงาน</label>
           <div className="relative">
@@ -152,6 +179,7 @@ export default function AddInventory() {
           </div>
         </div>
 
+        {/* Input & Scan Section */}
         <div className="bg-white p-6 rounded-[2rem] shadow-xl space-y-4">
           <div className="flex justify-between items-center ml-2">
              <label className="text-sm font-bold text-slate-500">เลข PEA ({peaList.length}/10)</label>
@@ -179,6 +207,7 @@ export default function AddInventory() {
             </button>
           </div>
 
+          {/* List Display */}
           <div className="mt-4 space-y-2 max-h-64 overflow-y-auto pt-2 border-t border-slate-50">
             {peaList.length === 0 && <p className="text-center text-slate-300 py-4 text-sm font-bold italic">ยังไม่มีรายการที่เพิ่ม</p>}
             {peaList.map((pea, index) => (
@@ -190,7 +219,7 @@ export default function AddInventory() {
           </div>
         </div>
 
-        {/* --- ปุ่มดำเนินการ --- */}
+        {/* Action Buttons */}
         <div className="grid grid-cols-1 gap-3">
           <button 
             onClick={handleSubmit} 
@@ -200,7 +229,6 @@ export default function AddInventory() {
             {isSubmitting ? "กำลังบันทึก..." : `💾 บันทึกเบิก (${peaList.length})`}
           </button>
 
-          {/* ✅ ปุ่มคืนคลังที่เพิ่มเข้ามาใหม่ */}
           <button 
             onClick={handleReturn} 
             disabled={isSubmitting || peaList.length === 0}
@@ -211,30 +239,57 @@ export default function AddInventory() {
         </div>
       </div>
 
-      {/* Scanner UI */}
+      {/* 🔴 ปรับปรุง Scanner UI ใหม่ตามโค้ดตัวอย่าง */}
       {isScanning && (
-        <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center overflow-hidden">
+        <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center overflow-hidden font-sans">
           <div className="relative w-full h-full">
             <video ref={videoRef} className="w-full h-full object-cover" playsInline />
+            
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <div className="relative w-72 h-48 border-2 border-white/30 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] flex items-center justify-center">
-                <div className="absolute -top-1 -left-1 w-10 h-10 border-t-8 border-l-8 border-white rounded-tl-2xl"></div>
-                <div className="absolute -top-1 -right-1 w-10 h-10 border-t-8 border-r-8 border-white rounded-tr-2xl"></div>
-                <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-8 border-l-8 border-white rounded-bl-2xl"></div>
-                <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-8 border-r-8 border-white rounded-br-2xl"></div>
-                <div className="absolute left-0 w-full h-[6px] bg-red-600 shadow-[0_0_20px_2px_#dc2626] animate-scan-line-bold"></div>
+              {/* กรอบเล็งแนวตั้ง */}
+              <div className="relative w-56 h-80 border-2 border-white/20 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] flex items-center justify-center">
+                
+                {/* มุมกรอบ */}
+                <div className="absolute -top-1 -left-1 w-12 h-12 border-t-[10px] border-l-[10px] border-white rounded-tl-3xl"></div>
+                <div className="absolute -top-1 -right-1 w-12 h-12 border-t-[10px] border-r-[10px] border-white rounded-tr-3xl"></div>
+                <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-[10px] border-l-[10px] border-white rounded-bl-3xl"></div>
+                <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-[10px] border-r-[10px] border-white rounded-br-3xl"></div>
+
+                {/* เส้นเลเซอร์วิ่งซ้าย-ขวา */}
+                <div className="absolute top-0 w-1.5 h-full bg-red-600 shadow-[0_0_20px_#dc2626] animate-scan-line-vertical"></div>
+
+                {/* เส้นกลาง */}
+                <div className="h-[90%] w-[2px] bg-red-500/40 shadow-[0_0_8px_#ef4444]"></div>
               </div>
+
+              <p className="mt-12 text-white font-black text-2xl tracking-widest drop-shadow-[0_2px_10px_rgba(0,0,0,1)] text-center">
+                สแกนบาร์โค้ดแนวตั้ง<br/>
+                <span className="text-lg font-normal opacity-80">(เอียงมิเตอร์แนวนอน)</span>
+              </p>
             </div>
+
             <div className="absolute bottom-10 w-full px-10">
-              <button onClick={() => setIsScanning(false)} className="w-full py-5 bg-white/10 backdrop-blur-md border-2 border-white/30 text-white text-2xl font-black rounded-3xl">ยกเลิก</button>
+              <button 
+                onClick={() => setIsScanning(false)} 
+                className="w-full py-6 bg-red-600/20 backdrop-blur-xl border-2 border-red-500/50 text-white text-2xl font-black rounded-3xl active:scale-95 transition-all"
+              >
+                ยกเลิก
+              </button>
             </div>
           </div>
         </div>
       )}
 
       <style jsx global>{`
-        @keyframes scan-line-bold { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }
-        .animate-scan-line-bold { position: absolute; animation: scan-line-bold 1.8s ease-in-out infinite; }
+        @keyframes scan-line-vertical {
+          0% { left: 5%; opacity: 0.5; }
+          50% { left: 95%; opacity: 1; }
+          100% { left: 5%; opacity: 0.5; }
+        }
+        .animate-scan-line-vertical {
+          position: absolute;
+          animation: scan-line-vertical 2s ease-in-out infinite;
+        }
       `}</style>
     </div>
   );

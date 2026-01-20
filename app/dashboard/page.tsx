@@ -205,7 +205,7 @@ export default function InventoryDashboard() {
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${viewMode === "remaining" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}>{viewMode === "remaining" ? "📦" : "✅"}</div>
                       <div className="flex flex-col">
                         <div className="text-2xl font-black text-slate-800 tracking-tighter leading-none">{item.pea}</div>
-                        <div className="text-[13px] font-bold text-slate-400 mt-2">พนักงาน: {item.staff}</div>
+                        <div className="text-[13px] font-bold text-slate-400 mt-2">ผู้เบิก: {item.staff}</div>
                       </div>
                     </div>
                   </div>

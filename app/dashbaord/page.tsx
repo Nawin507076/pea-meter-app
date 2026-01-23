@@ -12,7 +12,9 @@ import {
   Image as ImageIcon,
   ChevronDown,
   LayoutDashboard,
-  Timer
+  Timer,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 interface MeterData {
@@ -42,6 +44,13 @@ export default function Dashboard() {
   const [filterJobType, setFilterJobType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all"); // all, onsite, done
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  // UI State
+  const [isRemarkOpen, setIsRemarkOpen] = useState(false);
+
   useEffect(() => {
     fetch("/api/mongo/get-meters")
       .then((res) => res.json())
@@ -65,8 +74,12 @@ export default function Dashboard() {
 
   // Unique Remarks for Dropdown
   const uniqueRemarks = useMemo(() => {
-    const remarks = data.map(d => d.remark).filter(Boolean);
-    return Array.from(new Set(remarks));
+    const remarks = data.map(d => {
+      // Normalize "ปกติ..." to just "ปกติ"
+      if (d.remark && d.remark.startsWith("ปกติ")) return "ปกติ";
+      return d.remark;
+    }).filter(Boolean);
+    return Array.from(new Set(remarks)).sort();
   }, [data]);
 
   const filteredData = useMemo(() => {
@@ -84,6 +97,16 @@ export default function Dashboard() {
       return matchWorker && matchOldId && matchNewId && matchRemark && matchJobType && matchStatus;
     });
   }, [data, filterWorker, filterOldId, filterNewId, filterRemark, filterJobType, filterStatus]);
+
+  // Calculate Pagination
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(start, start + itemsPerPage);
+  }, [filteredData, currentPage]);
+
+  // Reset page when filter changes - REMOVED useEffect to avoid cascading renders
+  // Instead, we will reset page in the event handlers directly.
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#F3F0FF]">
@@ -126,7 +149,10 @@ export default function Dashboard() {
             ].map((t) => (
               <button
                 key={t.v}
-                onClick={() => setFilterJobType(t.v)}
+                onClick={() => {
+                  setFilterJobType(t.v);
+                  setCurrentPage(1);
+                }}
                 className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 ${filterJobType === t.v
                   ? "bg-[#742D9D] text-white shadow-md shadow-purple-200 transform scale-105"
                   : "text-slate-500 hover:bg-slate-50 hover:text-[#742D9D]"
@@ -144,7 +170,10 @@ export default function Dashboard() {
 
           {/* Total */}
           <button
-            onClick={() => setFilterStatus("all")}
+            onClick={() => {
+              setFilterStatus("all");
+              setCurrentPage(1);
+            }}
             className={`text-left relative overflow-hidden group p-6 rounded-3xl transition-all duration-300 border-2 ${filterStatus === "all"
               ? "bg-gradient-to-br from-[#742D9D] to-[#5B1E7A] text-white shadow-xl shadow-purple-200 border-transparent transform scale-[1.02]"
               : "bg-white text-slate-700 hover:border-[#E0D4FC] hover:shadow-lg border-transparent"
@@ -163,7 +192,10 @@ export default function Dashboard() {
 
           {/* On-site */}
           <button
-            onClick={() => setFilterStatus("onsite")}
+            onClick={() => {
+              setFilterStatus("onsite");
+              setCurrentPage(1);
+            }}
             className={`text-left relative overflow-hidden group p-6 rounded-3xl transition-all duration-300 border-2 ${filterStatus === "onsite"
               ? "bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-xl shadow-orange-200 border-transparent transform scale-[1.02]"
               : "bg-white text-slate-700 hover:border-orange-100 hover:shadow-lg border-transparent"
@@ -181,7 +213,10 @@ export default function Dashboard() {
 
           {/* Done */}
           <button
-            onClick={() => setFilterStatus("done")}
+            onClick={() => {
+              setFilterStatus("done");
+              setCurrentPage(1);
+            }}
             className={`text-left relative overflow-hidden group p-6 rounded-3xl transition-all duration-300 border-2 ${filterStatus === "done"
               ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-200 border-transparent transform scale-[1.02]"
               : "bg-white text-slate-700 hover:border-emerald-100 hover:shadow-lg border-transparent"
@@ -218,7 +253,10 @@ export default function Dashboard() {
                   placeholder="สมาน..."
                   className="w-full bg-slate-50 p-3.5 pl-12 rounded-xl outline-none text-slate-700 font-bold border-2 border-transparent focus:bg-white focus:border-[#742D9D] transition-all shadow-sm"
                   value={filterWorker}
-                  onChange={(e) => setFilterWorker(e.target.value)}
+                  onChange={(e) => {
+                    setFilterWorker(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 />
               </div>
             </div>
@@ -232,7 +270,10 @@ export default function Dashboard() {
                 placeholder="ระบุเลข..."
                 className="w-full bg-slate-50 p-3.5 px-5 rounded-xl outline-none text-slate-700 font-bold border-2 border-transparent focus:bg-white focus:border-red-500 transition-all shadow-sm"
                 value={filterOldId}
-                onChange={(e) => setFilterOldId(e.target.value)}
+                onChange={(e) => {
+                  setFilterOldId(e.target.value);
+                  setCurrentPage(1);
+                }}
               />
             </div>
 
@@ -245,27 +286,81 @@ export default function Dashboard() {
                 placeholder="ระบุเลข..."
                 className="w-full bg-slate-50 p-3.5 px-5 rounded-xl outline-none text-slate-700 font-bold border-2 border-transparent focus:bg-white focus:border-emerald-500 transition-all shadow-sm"
                 value={filterNewId}
-                onChange={(e) => setFilterNewId(e.target.value)}
+                onChange={(e) => {
+                  setFilterNewId(e.target.value);
+                  setCurrentPage(1);
+                }}
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 relative" onBlur={(e) => {
+              // Close dropdown when focus leaves the container
+              if (!e.currentTarget.contains(e.relatedTarget)) {
+                setIsRemarkOpen(false);
+              }
+            }}>
               <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
                 <FileText className="w-3 h-3" /> สาเหตุ / หมายเหตุ
               </label>
-              <input
-                list="remark-list"
-                type="text"
-                placeholder="เลือก หรือ พิมพ์ค้นหา..."
-                className="w-full bg-slate-50 p-3.5 px-5 rounded-xl outline-none text-slate-700 font-bold border-2 border-transparent focus:bg-white focus:border-orange-500 transition-all shadow-sm"
-                value={filterRemark}
-                onChange={(e) => setFilterRemark(e.target.value)}
-              />
-              <datalist id="remark-list">
-                {uniqueRemarks.map((remark, i) => (
-                  <option key={i} value={remark} />
-                ))}
-              </datalist>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="เลือก หรือ พิมพ์ค้นหา..."
+                  className="w-full bg-slate-50 p-3.5 px-5 pr-12 rounded-xl outline-none text-slate-700 font-bold border-2 border-transparent focus:bg-white focus:border-orange-500 transition-all shadow-sm"
+                  value={filterRemark}
+                  onChange={(e) => {
+                    setFilterRemark(e.target.value);
+                    setCurrentPage(1);
+                    setIsRemarkOpen(true);
+                  }}
+                  onFocus={() => setIsRemarkOpen(true)}
+                />
+                <button
+                  onClick={() => {
+                    // If has text, clear it. If empty, toggle dropdown.
+                    if (filterRemark) {
+                      setFilterRemark("");
+                      setCurrentPage(1);
+                      setIsRemarkOpen(true); // Keep open to show full list
+                    } else {
+                      setIsRemarkOpen(!isRemarkOpen);
+                    }
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-orange-500 transition-colors"
+                >
+                  {filterRemark ? (
+                    // Show X if has text (Optional, but user said 'triangle' actions. I'll stick to 'triangle' that clears)
+                    // Actually user said explicitly "click triangle to clear". 
+                    // Let's keep it as ChevronDown but make it interactive.
+                    <ChevronDown className={`w-5 h-5 transition-transform ${isRemarkOpen ? "rotate-180" : ""}`} />
+                  ) : (
+                    <ChevronDown className={`w-5 h-5 transition-transform ${isRemarkOpen ? "rotate-180" : ""}`} />
+                  )}
+                </button>
+              </div>
+
+              {/* Custom Dropdown Options */}
+              {isRemarkOpen && (
+                <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-200">
+                  {uniqueRemarks.filter(r => r.includes(filterRemark)).length > 0 ? (
+                    uniqueRemarks.filter(r => r.includes(filterRemark)).map((remark, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setFilterRemark(remark);
+                          setCurrentPage(1);
+                          setIsRemarkOpen(false);
+                        }}
+                        className="w-full text-left px-5 py-3 text-slate-600 font-bold hover:bg-orange-50 hover:text-orange-600 transition-colors border-b border-slate-50 last:border-0"
+                      >
+                        {remark}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-slate-400 text-sm">ไม่พบข้อมูล</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -284,13 +379,13 @@ export default function Dashboard() {
                   </th>
                   <th className="p-6 text-xs font-extrabold text-[#742D9D] uppercase tracking-wider text-left">ประเภทงาน</th>
                   <th className="p-6 text-xs font-extrabold text-[#742D9D] uppercase tracking-wider text-left">สาเหตุ/หมายเหตุ</th>
-                  <th className="p-6 text-xs font-extrabold text-[#742D9D] uppercase tracking-wider text-center">มิเตอร์เก่า</th>
-                  <th className="p-6 text-xs font-extrabold text-[#742D9D] uppercase tracking-wider text-center">มิเตอร์ใหม่</th>
+                  <th className="p-6 text-xs font-extrabold text-[#742D9D] uppercase tracking-wider text-center min-w-[200px]">มิเตอร์เก่า</th>
+                  <th className="p-6 text-xs font-extrabold text-[#742D9D] uppercase tracking-wider text-center min-w-[200px]">มิเตอร์ใหม่</th>
                   <th className="p-6 text-xs font-extrabold text-[#742D9D] uppercase tracking-wider text-center">พิกัด</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F0E6FF]">
-                {filteredData.map((item) => (
+                {paginatedData.map((item) => (
                   <tr key={item._id} className="hover:bg-[#FCFAFF] transition-colors group">
                     <td className="p-6 whitespace-nowrap text-sm font-bold text-slate-600">
                       {item.recordedAt}
@@ -316,8 +411,8 @@ export default function Dashboard() {
                     {/* มิเตอร์เก่า */}
                     <td className="p-6 text-center">
                       <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-black text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded mb-2 w-fit">{item.meterIdOld}</span>
-                        <span className="text-xl font-black text-red-500 font-mono tracking-tight">{item.readingOld}</span>
+                        <span className="text-[14px] font-black text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded mb-2 w-fit">PEA: {item.meterIdOld}</span>
+                        <span className="text-[14px] font-black text-red-500 font-mono tracking-tight">หน่วย: {item.readingOld}</span>
                         {item.photoOldUrl && (
                           <div className="mt-3 relative group/img cursor-zoom-in">
                             <div className="w-12 h-12 rounded-full border-2 border-white shadow-md overflow-hidden bg-slate-200">
@@ -334,8 +429,8 @@ export default function Dashboard() {
                     {/* มิเตอร์ใหม่ */}
                     <td className="p-6 text-center">
                       <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-black text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded mb-2 w-fit">{item.meterIdNew}</span>
-                        <span className="text-xl font-black text-emerald-500 font-mono tracking-tight">{item.readingNew}</span>
+                        <span className="text-[14px] font-black text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded mb-2 w-fit">PEA: {item.meterIdNew}</span>
+                        <span className="text-[14px] font-black text-emerald-500 font-mono tracking-tight">หน่วย: {item.readingNew}</span>
                         {item.photoNewUrl && (
                           <div className="mt-3 relative group/img cursor-zoom-in">
                             <div className="w-12 h-12 rounded-full border-2 border-white shadow-md overflow-hidden bg-slate-200">
@@ -369,6 +464,34 @@ export default function Dashboard() {
               <div className="p-12 text-center text-slate-400 bg-slate-50/50">
                 <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
                 <p className="font-bold">ไม่พบข้อมูลตามเงื่อนไข</p>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {filteredData.length > 0 && (
+              <div className="flex items-center justify-between p-6 bg-[#F8F5FF] border-t border-[#E0D4FC]">
+                <p className="text-sm font-bold text-slate-500">
+                  แสดง {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredData.length)} จาก {filteredData.length} รายการ
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg hover:bg-white hover:text-[#742D9D] disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="text-sm font-black text-[#742D9D] bg-white px-4 py-2 rounded-lg shadow-sm border border-[#E0D4FC]">
+                    หน้า {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg hover:bg-white hover:text-[#742D9D] disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             )}
           </div>

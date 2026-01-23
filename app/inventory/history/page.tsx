@@ -43,9 +43,8 @@ export default function DoneHistory() {
       return "https://placehold.co/400x400?text=No+Photo";
     }
     if (photoSource.includes("id=")) {
-      return `https://drive.google.com/thumbnail?id=${
-        photoSource.split("id=")[1].split("&")[0]
-      }&sz=w1000`;
+      return `https://drive.google.com/thumbnail?id=${photoSource.split("id=")[1].split("&")[0]
+        }&sz=w1000`;
     }
     if (!photoSource.includes(".")) {
       return `https://drive.google.com/thumbnail?id=${photoSource}&sz=w1000`;
@@ -59,7 +58,7 @@ export default function DoneHistory() {
   useEffect(() => {
     async function fetchHistory() {
       try {
-        const res = await fetch("/api/inventory/history");
+        const res = await fetch("/api/mongo/dashboard-stats");
         const json = (await res.json()) as HistoryResponse;
         if (json.success) {
           setCompletedItems(json.completedItems);
@@ -137,11 +136,10 @@ export default function DoneHistory() {
               filteredItems.map((item) => (
                 <div
                   key={item.pea}
-                  className={`bg-white/5 border transition-all rounded-[2.5rem] overflow-hidden ${
-                    expandedPea === item.pea
+                  className={`bg-white/5 border transition-all rounded-[2.5rem] overflow-hidden ${expandedPea === item.pea
                       ? "border-emerald-500/50 bg-white/10"
                       : "border-white/10"
-                  }`}
+                    }`}
                 >
                   {/* ---- Item header ---- */}
                   <div
@@ -167,9 +165,8 @@ export default function DoneHistory() {
                     </div>
 
                     <div
-                      className={`text-slate-500 transition-transform ${
-                        expandedPea === item.pea ? "rotate-180" : ""
-                      }`}
+                      className={`text-slate-500 transition-transform ${expandedPea === item.pea ? "rotate-180" : ""
+                        }`}
                     >
                       ▼
                     </div>

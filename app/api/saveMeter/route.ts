@@ -1,6 +1,5 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
 import { v2 as cloudinary, UploadApiResponse } from "cloudinary";
 import dbConnect from '@/lib/dbConnect';
 import Meter from '@/models/Meter';
@@ -96,70 +95,7 @@ export async function POST(req: NextRequest) {
     // บันทึกลงตารางงาน (Meters)
     await Meter.create(mongoData);
 
-    // --- ส่วนที่ 3: บันทึกลง Google Sheets และ Inventory ---
-    const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    const sheetId = process.env.GOOGLE_SHEET_ID;
-
-    if (!keyRaw || !sheetId) throw new Error("Missing environment variables");
-
-    const serviceAccount = JSON.parse(keyRaw.trim());
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: serviceAccount.client_email,
-        private_key: serviceAccount.private_key.replace(/\\n/g, "\n")
-      },
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
-    const sheets = google.sheets({ version: "v4", auth });
-
-    // บันทึก Sheet1
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: sheetId.trim(),
-      range: "Sheet1!A1",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [[
-          mongoData.recordedAt,
-          mongoData.worker,
-          mongoData.jobType,
-          mongoData.meterIdOld,
-          formData.get("oldUnit")?.toString(),
-          photoOldUrl,
-          mongoData.meterIdNew,
-          formData.get("newUnit")?.toString(),
-          photoNewUrl,
-          mongoData.remark,
-          mongoData.location.lat,
-          mongoData.location.lng,
-          (mongoData.location.lat && mongoData.location.lng)
-            ? `http://googleusercontent.com/maps.google.com/maps?q=${mongoData.location.lat},${mongoData.location.lng}`
-            : ""
-        ]]
-      },
-    });
-
-    // --- ส่วนที่ 4: ตัดสต็อก Inventory (Sheets & MongoDB) ---
-
-    // 4.1 Google Sheets
-    const invRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId.trim(),
-      range: "Inventory!A:A"
-    });
-
-    const invRows = invRes.data.values as string[][] | null;
-    if (invRows) {
-      const rowIndex = invRows.findIndex((row) => row[0] === mongoData.meterIdNew);
-      if (rowIndex !== -1) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: sheetId.trim(),
-          range: `Inventory!D${rowIndex + 1}:E${rowIndex + 1}`,
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: [["yes", mongoData.recordedAt]] }
-        });
-      }
-    }
-
-    // 4.2 MongoDB Inventory
+    // --- ส่วนที่ 3: ตัดสต็อก Inventory (MongoDB Only) ---
     await Inventory.findOneAndUpdate(
       { pea_new: mongoData.meterIdNew },
       {

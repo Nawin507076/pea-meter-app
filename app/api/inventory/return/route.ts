@@ -1,6 +1,5 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
-import { google, sheets_v4 } from "googleapis";
 import dbConnect from "@/lib/dbConnect";
 import Inventory from "@/models/Inventory";
 
@@ -10,136 +9,80 @@ interface InventoryRequest {
   staffName: string;
 }
 
-// 2. Interface สำหรับ Google Service Account
-interface GoogleKey {
-  client_email: string;
-  private_key: string;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as InventoryRequest;
     const { items, staffName } = body;
 
-    const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    const sheetId = process.env.GOOGLE_SHEET_ID;
+    await dbConnect();
 
-    if (!keyRaw || !sheetId) {
-      return NextResponse.json(
-        { success: false, error: "Missing Env Variables" },
-        { status: 500 }
-      );
-    }
-
-    const serviceAccount = JSON.parse(keyRaw.trim()) as GoogleKey;
-    
-    const auth = new google.auth.GoogleAuth({
-      credentials: { 
-        client_email: serviceAccount.client_email, 
-        private_key: serviceAccount.private_key.replace(/\\n/g, "\n") 
-      },
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
-
-    const sheets = google.sheets({ version: "v4", auth });
-    const spreadsheetId = sheetId.trim();
-
-    // 1. ดึงข้อมูลจากชีต Inventory (คอลัมน์ A ถึง D)
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: "Inventory!A:D",
-    });
-
-    const rows = response.data.values;
-    if (!rows || rows.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "ไม่พบข้อมูลในระบบ" },
-        { status: 404 }
-      );
-    }
-
-    // ✅ แก้ไข "Unexpected any" โดยการระบุ Type ของ Google Sheets SDK
-    const dataToUpdate: sheets_v4.Schema$ValueRange[] = [];
+    // 1. ตรวจสอบสถานะของแต่ละรายการก่อนอัปเดต
     const forbiddenPeas: string[] = [];
     const notFoundPeas: string[] = [];
+    const validPeas: string[] = [];
 
-    // 2. ตรวจสอบเงื่อนไขแต่ละรายการ PEA ที่ส่งมา
-    items.forEach((peaToFind: string) => {
-      const rowIndex = rows.findIndex((row) => row[0] === peaToFind);
-      
-      if (rowIndex !== -1) {
-        const currentStatus = rows[rowIndex][3]; // คอลัมน์ D คือ Index 3
+    // ตรวจสอบข้อมูลจาก MongoDB
+    const inventoryItems = await Inventory.find({
+      pea_new: { $in: items.map(i => i.trim().toUpperCase()) }
+    });
 
-        // 🛑 ถ้าสถานะเป็น 'yes' (ติดตั้งแล้ว) ห้ามคืนคลัง
-        if (currentStatus === "yes") {
-          forbiddenPeas.push(peaToFind);
-        } else {
-          // เตรียมข้อมูลเพื่อ Update แถวนั้นๆ ในคอลัมน์ D
-          dataToUpdate.push({
-            range: `Inventory!D${rowIndex + 1}`,
-            values: [["back"]]
-          });
-        }
+    // Map เพื่อการเข้าถึงที่รวดเร็ว
+    const invMap = new Map();
+    inventoryItems.forEach(inv => invMap.set(inv.pea_new, inv));
+
+    items.forEach(pea => {
+      const cleanPea = pea.trim().toUpperCase();
+      const inv = invMap.get(cleanPea);
+
+      if (!inv) {
+        notFoundPeas.push(cleanPea);
+      } else if (inv.inst_flag === 'yes') {
+        // ห้ามคืนถ้าติดตั้งแล้ว
+        forbiddenPeas.push(cleanPea);
       } else {
-        notFoundPeas.push(peaToFind);
+        validPeas.push(cleanPea);
       }
     });
 
-    // 3. จัดการกรณีที่มีรายการติดเงื่อนไข
+    // 2. ถ้ามีรายการที่ผิดเงื่อนไข ให้แจ้ง Error
     if (forbiddenPeas.length > 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: `ไม่สามารถคืนคลังได้เนื่องจากเครื่องสถานะเป็น (ติดตั้งไปแล้ว): ${forbiddenPeas.join(", ")} ตรวจสอบในงานรอคีย์เข้าในระบบ` 
+      return NextResponse.json({
+        success: false,
+        error: `ไม่สามารถคืนคลังได้เนื่องจากเครื่องสถานะเป็น (ติดตั้งไปแล้ว): ${forbiddenPeas.join(", ")} ตรวจสอบในงานรอคีย์เข้าในระบบ`
       }, { status: 400 });
     }
 
-    if (dataToUpdate.length === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "ไม่พบหมายเลข PEA ที่สามารถทำรายการได้ในระบบ" 
+    if (validPeas.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: "ไม่พบหมายเลข PEA ที่สามารถทำรายการได้ในระบบ"
       }, { status: 404 });
     }
 
-    // 4. บันทึกข้อมูลกลับไปยัง Google Sheets แบบ Batch
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        data: dataToUpdate,
-        valueInputOption: "USER_ENTERED",
-      },
-    });
-    // 🟢 เพิ่มส่วนที่ 5: บันทึกลง MongoDB (ส่วนที่คุณ New ต้องเพิ่ม)
-    await dbConnect();
-    
-    // วนลูปอัปเดตรายการที่ผ่านเงื่อนไขใน MongoDB
+    // 3. ทำการอัปเดตเฉพาะรายการที่ผ่านเงื่อนไขใน MongoDB
     const returnDate = new Date().toLocaleString("th-TH");
-    
-    // ใช้ Promise.all เพื่ออัปเดตทุกรายการพร้อมกันแบบรวดเร็ว
-    await Promise.all(
-      items.map(async (pea: string) => {
-        return Inventory.findOneAndUpdate(
-          { pea_new: pea.trim().toUpperCase() },
-          { 
-            $set: { 
-              inst_flag: "pullback", // เปลี่ยนจาก back เป็น pullback ตามที่เราคุยกัน
-              return_date: returnDate
-            } 
-          }
-        );
-      })
+
+    await Inventory.updateMany(
+      { pea_new: { $in: validPeas } },
+      {
+        $set: {
+          inst_flag: "pullback",
+          return_date: returnDate
+        }
+      }
     );
 
-    console.log(`Return Success: ${dataToUpdate.length} items by ${staffName}`);
+    console.log(`Return Success: ${validPeas.length} items by ${staffName}`);
 
-    return NextResponse.json({ 
-      success: true, 
-      message: `คืนคลังสำเร็จ ${dataToUpdate.length} รายการ` 
+    return NextResponse.json({
+      success: true,
+      message: `คืนคลังสำเร็จ ${validPeas.length} รายการ`
     });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     console.error("Return API Error:", errorMessage);
-    
+
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

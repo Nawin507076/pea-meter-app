@@ -1,9 +1,11 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
 import { v2 as cloudinary } from "cloudinary";
+import dbConnect from '@/lib/dbConnect';
+import Meter from '@/models/Meter';
+import Inventory from '@/models/Inventory';
 
-// 1. ตั้งค่า Cloudinary (ให้เหมือนไฟล์ที่ใช้งานได้)
+// 1. ตั้งค่า Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -32,84 +34,79 @@ async function uploadToCloudinary(file: File): Promise<string> {
 
 export async function POST(req: NextRequest) {
   try {
-    const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    const sheetId = process.env.GOOGLE_SHEET_ID;
-
-    if (!keyRaw || !sheetId) {
-      return NextResponse.json({ success: false, error: "Missing Env" }, { status: 500 });
-    }
+    await dbConnect();
 
     const formData = await req.formData();
-    const originalPeaId = (formData.get("originalPeaId") as string) || "";
-    const newPeaId = (formData.get("pea") as string) || "";
-    const peaOld = (formData.get("peaOld") as string) || "";
-    const oldUnit = (formData.get("oldUnit") as string) || "";
-    const newUnit = (formData.get("newUnit") as string) || "";
-    const remark = (formData.get("remark") as string) || "";
+    const originalPeaId = (formData.get("originalPeaId") as string)?.trim();
+    const newPeaId = (formData.get("pea") as string)?.trim(); // ค่า PEA ใหม่ที่อาจถูกแก้ไข
+
+    const peaOld = (formData.get("peaOld") as string);
+    const oldUnit = Number(formData.get("oldUnit"));
+    const newUnit = Number(formData.get("newUnit"));
+    const remark = (formData.get("remark") as string);
 
     const photoOldFile = formData.get("photoOldFile") as File | null;
     const photoNewFile = formData.get("photoNewFile") as File | null;
 
-    // --- ส่วนที่ 1: อัปโหลดรูปไป Cloudinary (ถ้ามีการแนบไฟล์มาใหม่) ---
+    if (!originalPeaId) {
+      return NextResponse.json({ success: false, error: "Missing Original PEA ID" }, { status: 400 });
+    }
+
+    // 1. หาข้อมูล Meter เดิม
+    const meter = await Meter.findOne({ meterIdNew: originalPeaId });
+    if (!meter) {
+      return NextResponse.json({ success: false, error: "Meter record not found" }, { status: 404 });
+    }
+
+    // 2. อัปโหลดรูปใหม่ (ถ้ามี)
     const [photoOldUrl, photoNewUrl] = await Promise.all([
       photoOldFile && photoOldFile.size > 0 ? uploadToCloudinary(photoOldFile) : Promise.resolve(""),
       photoNewFile && photoNewFile.size > 0 ? uploadToCloudinary(photoNewFile) : Promise.resolve("")
     ]);
 
-    // --- ส่วนที่ 2: ตั้งค่า Google Auth ---
-    const serviceAccount = JSON.parse(keyRaw.trim());
-    const auth = new google.auth.GoogleAuth({
-      credentials: { 
-        client_email: serviceAccount.client_email, 
-        private_key: serviceAccount.private_key.replace(/\\n/g, "\n") 
-      },
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
+    // 3. เตรียมข้อมูลที่จะอัปเดต
+    const updateData: any = {
+      meterIdOld: peaOld,
+      readingOld: !isNaN(oldUnit) ? oldUnit : meter.readingOld,
+      readingNew: !isNaN(newUnit) ? newUnit : meter.readingNew,
+      remark: remark || meter.remark,
+    };
 
-    const sheets = google.sheets({ version: "v4", auth });
-    const sheetName = "Sheet1";
+    if (photoOldUrl) updateData.photoOldUrl = photoOldUrl;
+    if (photoNewUrl) updateData.photoNewUrl = photoNewUrl;
 
-    // ดึงข้อมูลเดิมมาตรวจสอบ
-    const getRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId.trim(),
-      range: `${sheetName}!A:N`,
-    });
+    // 4. กรณีที่มีการเปลี่ยนเลข PEA ใหม่ (Inventory Swap)
+    if (newPeaId && newPeaId !== originalPeaId) {
+      // 4.1 ตรวจสอบว่า PEA ใหม่มีใน Inventory ไหม
+      const newInv = await Inventory.findOne({ pea_new: newPeaId });
+      if (!newInv) {
+        return NextResponse.json({ success: false, error: `ไม่พบ PEA ${newPeaId} ในคลัง` }, { status: 400 });
+      }
 
-    const rows = (getRes.data.values as string[][]) || [];
-    // หาแถวที่คอลัมน์ G (Index 6) ตรงกับเลข PEA ใหม่เดิม
-    const rowIndex = rows.findIndex((row) => row[6] === originalPeaId);
+      // 4.2 ตรวจสอบว่า PEA ใหม่ถูกใช้ไปหรือยัง (ถ้าใช้แล้ว ต้องไม่ใช่ตัวมันเอง ซึ่งไม่น่าใช่เพราะ original != new)
+      if (newInv.inst_flag === 'yes') {
+        return NextResponse.json({ success: false, error: `PEA ${newPeaId} ถูกติดตั้งไปแล้ว` }, { status: 400 });
+      }
 
-    if (rowIndex === -1) {
-      return NextResponse.json({ success: false, error: "Requested entity was not found (PEA ID)" }, { status: 404 });
+      // 4.3 อัปเดต Inventory
+      // คืนสถานะตัวเก่า
+      await Inventory.updateOne(
+        { pea_new: originalPeaId },
+        { $set: { inst_flag: "no", installed_date: "" } }
+      );
+
+      // ตัดสถานะตัวใหม่
+      await Inventory.updateOne(
+        { pea_new: newPeaId },
+        { $set: { inst_flag: "yes", installed_date: meter.recordedAt } }
+      );
+
+      // อัปเดตเลขใน Meter
+      updateData.meterIdNew = newPeaId;
     }
 
-    const currentRow = rows[rowIndex];
-
-    // --- ส่วนที่ 3: รวมข้อมูลใหม่กับข้อมูลเดิม ---
-    // ลำดับ A-N: วันที่,พนักงาน,แผนก,PEAเก่า,หน่วยเก่า,รูปเก่า,PEAใหม่,หน่วยใหม่,รูปใหม่,สาเหตุ,lat,long,map,เปลี่ยนแล้ว
-    const updatedRow = [
-      currentRow[0] || "",               // A: วันที่เดิม
-      currentRow[1] || "",               // B: พนักงานเดิม
-      currentRow[2] || "",               // C: แผนกเดิม
-      peaOld || currentRow[3] || "",     // D: PEAเก่าใหม่ หรือ เดิม
-      oldUnit || currentRow[4] || "",    // E: หน่วยเก่าใหม่ หรือ เดิม
-      photoOldUrl || currentRow[5] || "", // F: Link Cloudinary ใหม่ หรือ Link เดิม
-      newPeaId || currentRow[6] || "",   // G: PEAใหม่ (ตัวแก้ไข)
-      newUnit || currentRow[7] || "",    // H: หน่วยใหม่
-      photoNewUrl || currentRow[8] || "", // I: Link Cloudinary ใหม่ หรือ Link เดิม
-      remark || currentRow[9] || "",     // J: สาเหตุ
-      currentRow[10] || "",              // K: lat
-      currentRow[11] || "",              // L: lng
-      currentRow[12] || "",              // M: map link
-      currentRow[13] || ""               // N: เปลี่ยนแล้ว (สถานะเดิม)
-    ];
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId.trim(),
-      range: `${sheetName}!A${rowIndex + 1}:N${rowIndex + 1}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [updatedRow] },
-    });
+    // 5. บันทึกข้อมูล Meter
+    await Meter.updateOne({ _id: meter._id }, { $set: updateData });
 
     return NextResponse.json({ success: true });
 

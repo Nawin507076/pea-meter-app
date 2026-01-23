@@ -1,6 +1,8 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { google, sheets_v4 } from "googleapis";
+import dbConnect from "@/lib/dbConnect";
+import Inventory from "@/models/Inventory";
 
 // 1. กำหนด Interface สำหรับข้อมูลที่รับเข้ามา
 interface InventoryRequest {
@@ -106,6 +108,26 @@ export async function POST(req: NextRequest) {
         valueInputOption: "USER_ENTERED",
       },
     });
+    // 🟢 เพิ่มส่วนที่ 5: บันทึกลง MongoDB (ส่วนที่คุณ New ต้องเพิ่ม)
+    await dbConnect();
+    
+    // วนลูปอัปเดตรายการที่ผ่านเงื่อนไขใน MongoDB
+    const returnDate = new Date().toLocaleString("th-TH");
+    
+    // ใช้ Promise.all เพื่ออัปเดตทุกรายการพร้อมกันแบบรวดเร็ว
+    await Promise.all(
+      items.map(async (pea: string) => {
+        return Inventory.findOneAndUpdate(
+          { pea_new: pea.trim().toUpperCase() },
+          { 
+            $set: { 
+              inst_flag: "pullback", // เปลี่ยนจาก back เป็น pullback ตามที่เราคุยกัน
+              return_date: returnDate
+            } 
+          }
+        );
+      })
+    );
 
     console.log(`Return Success: ${dataToUpdate.length} items by ${staffName}`);
 

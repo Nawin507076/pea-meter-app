@@ -162,9 +162,9 @@ const getCurrentLocation = useCallback(() => {
 
     // ตั้งค่าความแม่นยำสูง
     const gpsOptions: PositionOptions = {
-      enableHighAccuracy: true, 
-      timeout: 15000,           
-      maximumAge: 0            
+enableHighAccuracy: true, // หรือลองเปลี่ยนเป็น false ถ้าอยู่ในตึก
+  timeout: 20000,           // เพิ่มเป็น 20 วินาที
+  maximumAge: 30000          
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -194,11 +194,18 @@ const getCurrentLocation = useCallback(() => {
   const handleNext = () => setStep(s => Math.min(s + 1, 3));
   const handleBack = () => step === 1 ? router.push("/") : setStep(s => s - 1);
 
-  const handleSave = async () => {
-if (!workerInfo || isSubmitting) return;
+const handleSave = async () => {
+    if (!workerInfo || isSubmitting) return;
     setIsSubmitting(true);
 
     try {
+      const timestamp = new Date().toLocaleString("th-TH");
+      const finalRemark = remark === "ปกติ" && remarkDetails 
+        ? `ปกติ: ${remarkDetails}` 
+        : remark;
+
+      // --- [1. เตรียมข้อมูลก้อนเดียวในรูปแบบ FormData] ---
+      // ส่งไปที่ API เดียว แล้วให้หลังบ้านไปแยกแจกจ่ายเอง
       const formData = new FormData();
       formData.append("worker", workerInfo.worker);
       formData.append("jobType", workerInfo.jobType);
@@ -206,14 +213,12 @@ if (!workerInfo || isSubmitting) return;
       formData.append("oldUnit", oldUnit);
       formData.append("peaNew", peaNew);
       formData.append("newUnit", newUnit);
-      const finalRemark = remark === "ปกติ" && remarkDetails 
-        ? `ปกติ: ${remarkDetails}` 
-        : remark;
       formData.append("remark", finalRemark);
       formData.append("lat", location.lat);
       formData.append("lng", location.lng);
-      formData.append("timestamp", new Date().toLocaleString("th-TH"));
+      formData.append("timestamp", timestamp);
 
+      // บีบอัดรูปก่อนส่ง (เพื่อประหยัดเน็ตมือถือหน้างาน)
       if (photoOld) {
         const compOld = await compressImage(photoOld);
         formData.append("photoOld", compOld, "old.jpg");
@@ -223,18 +228,25 @@ if (!workerInfo || isSubmitting) return;
         formData.append("photoNew", compNew, "new.jpg");
       }
 
-      const res = await fetch("/api/saveMeter", { method: "POST", body: formData });
-      const result = (await res.json()) as SaveResponse;
+      // --- [2. ส่งข้อมูลไปที่ API หลักตัวเดียว] ---
+      const res = await fetch("/api/saveMeter", { 
+        method: "POST", 
+        body: formData 
+      });
 
+      const result = await res.json();
+
+      // --- [3. ตรวจสอบและแจ้งผล] ---
       if (res.ok && result.success) {
-        alert("บันทึกข้อมูลเรียบร้อย ✅");
+        alert("บันทึกข้อมูลเรียบร้อย ✅ (Cloudinary + MongoDB + Google Sheets)");
         localStorage.removeItem("worker_info"); 
         router.push("/");
       } else {
         throw new Error(result.error || "บันทึกไม่สำเร็จ");
       }
+
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Unknown error";
+      const msg = e instanceof Error ? e.message : "เกิดข้อผิดพลาดไม่ทราบสาเหตุ";
       alert("❌ ล้มเหลว: " + msg);
     } finally {
       setIsSubmitting(false);

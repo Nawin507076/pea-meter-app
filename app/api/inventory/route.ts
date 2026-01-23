@@ -1,14 +1,14 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
+import dbConnect from '@/lib/dbConnect'; // นำเข้าตัวเชื่อมต่อ
+import Inventory from '@/models/Inventory'; // นำเข้า Model ใหม่
 
-// 1. กำหนด Interface สำหรับข้อมูลที่รับเข้ามา
 interface InventoryRequest {
   items: string[];
   staffName: string;
 }
 
-// 2. Interface สำหรับ Google Service Account
 interface GoogleKey {
   client_email: string;
   private_key: string;
@@ -16,7 +16,6 @@ interface GoogleKey {
 
 export async function POST(req: NextRequest) {
   try {
-    // ระบุ Type ให้กับข้อมูลที่รับจาก Body
     const body = (await req.json()) as InventoryRequest;
     const { items, staffName } = body;
 
@@ -24,15 +23,34 @@ export async function POST(req: NextRequest) {
     const sheetId = process.env.GOOGLE_SHEET_ID;
 
     if (!keyRaw || !sheetId) {
-      return NextResponse.json(
-        { success: false, error: "Missing Env Variables" },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, error: "Missing Env" }, { status: 500 });
     }
 
-    // ระบุ Type ให้กับผลลัพธ์จาก JSON.parse
-    const serviceAccount = JSON.parse(keyRaw.trim()) as GoogleKey;
+    const withdrawDate = new Date().toLocaleString("th-TH");
+
+    // --- [ส่วนที่ 1: บันทึกลง MongoDB] ---
+    await dbConnect();
     
+    // เตรียมข้อมูลสำหรับ MongoDB
+    const mongoItems = items.map((pea: string) => ({
+      pea_new: pea.trim().toUpperCase(), // ป้องกันเว้นวรรคและตัวพิมพ์เล็ก
+      staff_name: staffName,
+      withdraw_date: withdrawDate,
+      inst_flag: "no",
+      installed_date: ""
+    }));
+
+    /** * ใช้ insertMany เพื่อบันทึกข้อมูลหลายตัวพร้อมกัน
+     * ordered: false หมายถึงถ้าตัวไหนซ้ำ (Duplicate) ให้ข้ามไปแล้วทำตัวอื่นต่อ 
+     */
+    try {
+      await Inventory.insertMany(mongoItems, { ordered: false });
+    } catch (mongoErr) {
+      console.warn("บางรายการอาจจะซ้ำในระบบ MongoDB แต่จะดำเนินการต่อที่ Sheets");
+    }
+
+    // --- [ส่วนที่ 2: บันทึกลง Google Sheets (โค้ดเดิม)] ---
+    const serviceAccount = JSON.parse(keyRaw.trim()) as GoogleKey;
     const auth = new google.auth.GoogleAuth({
       credentials: { 
         client_email: serviceAccount.client_email, 
@@ -43,12 +61,11 @@ export async function POST(req: NextRequest) {
 
     const sheets = google.sheets({ version: "v4", auth });
     
-    // เตรียมข้อมูลลง Inventory (A: เลข PEA, B: ชื่อคนเบิก, C: วันที่เบิก, D: inst_flag)
     const values: string[][] = items.map((pea: string) => [
       pea,
       staffName,
-      new Date().toLocaleString("th-TH"),
-      "no" // Default ค่าเป็น no
+      withdrawDate,
+      "no"
     ]);
 
     await sheets.spreadsheets.values.append({
@@ -61,13 +78,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
 
   } catch (error: unknown) {
-    // 3. จัดการ Error แบบ Type-safe (แทนที่ any)
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     console.error("Inventory API Error:", errorMessage);
-    
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }

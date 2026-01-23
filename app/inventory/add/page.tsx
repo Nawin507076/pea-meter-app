@@ -32,7 +32,7 @@ export default function AddInventory() {
       setIsScanning(false);
       return;
     }
-    const cleanCode = code.trim().replace(/\D/g, ""); // กรองเฉพาะตัวเลข
+    const cleanCode = code.trim().toUpperCase();
     if (cleanCode && cleanCode.length >= 9) {
       if (peaList.includes(cleanCode)) {
         alert("เลขนี้ถูกเพิ่มไปแล้วครับ");
@@ -111,7 +111,7 @@ export default function AddInventory() {
       const res = await fetch("/api/inventory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: peaList, staffName }),
+        body: JSON.stringify({ items: peaList, staffName, status: 'no' }),
       });
       if (res.ok) {
         alert("บันทึกรายการเบิกสำเร็จ ✅");
@@ -133,7 +133,7 @@ export default function AddInventory() {
       const res = await fetch("/api/inventory/return", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: peaList, staffName, status: 'back' }),
+        body: JSON.stringify({ items: peaList, staffName, status: 'pullback' }),
       });
 
       const result = await res.json();

@@ -1,6 +1,8 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
+import dbConnect from "@/lib/dbConnect";
+import Meter from "@/models/Meter";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +18,14 @@ export async function POST(req: NextRequest) {
     if (!keyRaw || !sheetId) {
       return NextResponse.json({ success: false, error: "Missing Environment Variables" }, { status: 500 });
     }
+
+    await dbConnect();
+    const upDateStatus = await Meter.findOneAndUpdate(
+      
+        { meterIdNew: peaId.toString() },
+        {$set:{status:"done"}},
+        {new: true}
+    )
 
     const serviceAccount = JSON.parse(keyRaw.trim());
     const auth = new google.auth.GoogleAuth({

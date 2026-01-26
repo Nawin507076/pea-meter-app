@@ -18,26 +18,29 @@ export async function POST(req: NextRequest) {
     // --- [ส่วนที่ 1: บันทึกลง MongoDB] ---
     await dbConnect();
 
-    // เตรียมข้อมูลสำหรับ MongoDB
-    const mongoItems = items.map((pea: string) => ({
-      pea_new: pea.trim().toUpperCase(), // ป้องกันเว้นวรรคและตัวพิมพ์เล็ก
-      staff_name: staffName,
-      withdraw_date: withdrawDate,
-      inst_flag: "no",
-      installed_date: ""
+    // เตรียม Operations สำหรับ bulkWrite (Upsert: ถ้ามีอัปเดต ถ้าไม่มีเพิ่มใหม่)
+    const operations = items.map((pea: string) => ({
+      updateOne: {
+        filter: { pea_new: pea.trim().toUpperCase() },
+        update: {
+          $set: {
+            staff_name: staffName,
+            withdraw_date: withdrawDate,
+            inst_flag: "no",
+            installed_date: ""
+          }
+        },
+        upsert: true
+      }
     }));
 
-    /** * ใช้ insertMany เพื่อบันทึกข้อมูลหลายตัวพร้อมกัน
-     * ordered: false หมายถึงถ้าตัวไหนซ้ำ (Duplicate) ให้ข้ามไปแล้วทำตัวอื่นต่อ 
-     */
     try {
-      await Inventory.insertMany(mongoItems, { ordered: false });
-    } catch (mongoErr: any) {
-      // Duplicate key check
-      if (mongoErr.code !== 11000) {
-        throw mongoErr; // ถ้าไม่ใช่ Duplicate error ให้โยนต่อ
+      if (operations.length > 0) {
+        await Inventory.bulkWrite(operations);
       }
-      console.warn("บางรายการอาจจะซ้ำในระบบ MongoDB (ข้ามไป)");
+    } catch (mongoErr: any) {
+      console.error("BulkWrite Error:", mongoErr);
+      throw new Error("เกิดข้อผิดพลาดในการบันทึกข้อมูลลงฐานข้อมูล");
     }
 
     return NextResponse.json({ success: true });

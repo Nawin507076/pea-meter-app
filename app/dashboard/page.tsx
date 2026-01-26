@@ -14,6 +14,7 @@ interface HistoryDetail {
   remark: string;
   lat: string;
   lng: string;
+  date: string
   inst_flag?: string;
 }
 
@@ -217,7 +218,9 @@ export default function InventoryDashboard() {
                       <div className="bg-emerald-600 p-6 rounded-[2rem] text-white shadow-lg relative">
                         <span className="text-[12px] font-black uppercase opacity-70">พนักงานผู้ติดตั้ง</span>
                         <div className="text-2xl font-black mt-1 leading-tight">{item.history.worker}</div>
-                        <div className="mt-3 bg-white/20 px-3 py-1.5 rounded-xl w-fit text-[11px] font-black italic">📅 วันที่/เวลา: {item.date}</div>
+                        <div className="mt-3 bg-white/20 px-3 py-1.5 rounded-xl w-fit text-[11px] font-black italic">
+                          📅 วันที่/เวลา: {item.history.date ? new Date(item.history.date).toLocaleDateString("th-TH") : "-"}
+                        </div>
 
                         <div className="absolute top-4 right-4 flex flex-col gap-2">
                           <button onClick={(e) => { e.stopPropagation(); isEditing === item.pea ? handleUpdateDetail(item.pea) : startEditing(item); }} className="bg-white text-emerald-700 px-4 py-2 rounded-xl text-xs font-black shadow-md">

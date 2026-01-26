@@ -46,6 +46,7 @@ export async function GET() {
                     remark: meterWork.remark,
                     lat: meterWork.location?.lat,
                     lng: meterWork.location?.lng,
+                    date: meterWork.createdAt?.toISOString().split('T')[0],
                     inst_flag: inv.inst_flag
                 } : undefined
             };
@@ -65,9 +66,12 @@ export async function GET() {
         });
 
         // Sort by date (newest first)
-        installedItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // Helper to get effective date: use history date (install) if available, otherwise inventory date (withdraw)
+        const getSortDate = (item: any) => item.history?.date || item.date;
+
+        installedItems.sort((a, b) => new Date(getSortDate(b)).getTime() - new Date(getSortDate(a)).getTime());
         remainingItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        completedItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        completedItems.sort((a, b) => new Date(getSortDate(b)).getTime() - new Date(getSortDate(a)).getTime());
 
         return NextResponse.json({
             success: true,

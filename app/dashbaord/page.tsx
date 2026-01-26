@@ -14,7 +14,8 @@ import {
   LayoutDashboard,
   Timer,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  CheckCircle2 // New icon for Normal
 } from "lucide-react";
 
 interface MeterData {
@@ -67,9 +68,16 @@ export default function Dashboard() {
 
     // 2. Count statuses from the filtered set
     const total = dataByJob.length;
-    const onsite = dataByJob.filter(d => !d.status || d.status === "").length;
+    // Onsite: Status is empty AND meterIdNew is NOT empty (meaning a meter was swapped)
+    const onsite = dataByJob.filter(d => (!d.status || d.status === "") && d.meterIdNew && d.meterIdNew !== "").length;
     const done = dataByJob.filter(d => d.status === "done").length;
-    return { total, onsite, done };
+
+    // Count "Normal/Other" (remark starts with "ปกติ" OR is "อื่นๆ") AND no new meter (meterIdNew is empty)
+    const normalOther = dataByJob.filter(d =>
+      ((d.remark && d.remark.startsWith("ปกติ")) || d.remark === "อื่นๆ") && (!d.meterIdNew || d.meterIdNew === "")
+    ).length;
+
+    return { total, onsite, done, normalOther };
   }, [data, filterJobType]);
 
   // Unique Remarks for Dropdown
@@ -91,8 +99,13 @@ export default function Dashboard() {
       const matchJobType = filterJobType === "all" || item.jobType === filterJobType;
 
       let matchStatus = true;
-      if (filterStatus === "onsite") matchStatus = !item.status || item.status === "";
+      if (filterStatus === "onsite") {
+        matchStatus = (!item.status || item.status === "") && (!!item.meterIdNew && item.meterIdNew !== "");
+      }
       if (filterStatus === "done") matchStatus = item.status === "done";
+      if (filterStatus === "normal_other") {
+        matchStatus = ((item.remark && item.remark.startsWith("ปกติ")) || item.remark === "อื่นๆ") && (!item.meterIdNew || item.meterIdNew === "");
+      }
 
       return matchWorker && matchOldId && matchNewId && matchRemark && matchJobType && matchStatus;
     });
@@ -166,7 +179,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Cards / Summary Boxes */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
 
           {/* Total */}
           <button
@@ -188,6 +201,27 @@ export default function Dashboard() {
             </div>
             {/* BG Icon */}
             <FileText className={`absolute -right-4 -bottom-4 w-32 h-32 opacity-[0.08] transform rotate-12 group-hover:scale-110 transition-transform ${filterStatus === "all" ? "text-white" : "text-[#742D9D]"}`} />
+          </button>
+
+          {/* Normal / Other */}
+          <button
+            onClick={() => {
+              setFilterStatus("normal_other");
+              setCurrentPage(1);
+            }}
+            className={`text-left relative overflow-hidden group p-6 rounded-3xl transition-all duration-300 border-2 ${filterStatus === "normal_other"
+              ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-xl shadow-blue-200 border-transparent transform scale-[1.02]"
+              : "bg-white text-slate-700 hover:border-blue-100 hover:shadow-lg border-transparent"
+              }`}
+          >
+            <div className="relative z-10">
+              <p className={`text-sm font-bold mb-1 ${filterStatus === "normal_other" ? "text-blue-100" : "text-slate-400"}`}>ปกติ / อื่นๆ</p>
+              <h3 className="text-4xl font-black mb-2">{stats.normalOther}</h3>
+              <div className={`text-xs font-bold px-2 py-1 rounded-lg inline-flex items-center gap-1 ${filterStatus === "normal_other" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
+                <CheckCircle2 className="w-3 h-3" /> รายการ
+              </div>
+            </div>
+            <CheckCircle2 className={`absolute -right-4 -bottom-4 w-32 h-32 opacity-[0.15] transform rotate-12 group-hover:scale-110 transition-transform ${filterStatus === "normal_other" ? "text-white" : "text-blue-500"}`} />
           </button>
 
           {/* On-site */}

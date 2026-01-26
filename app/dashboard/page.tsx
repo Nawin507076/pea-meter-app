@@ -50,7 +50,7 @@ export default function InventoryDashboard() {
   const [editData, setEditData] = useState<Partial<HistoryDetail & { pea: string }>>({});
   const [tempPhotos, setTempPhotos] = useState<{ old?: File; new?: File }>({});
 
-  const remarkOptions: string[] = ["ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "เปลี่ยนเป็นมิเตอร์อิเล็กทรอนิกส์", "ใช้ไฟเกิน(ct ไหม้)", "ไม่หมุน", "หมุนติดขัด", "ฝาครอบแตก", "ตราข้างชำรุด", "จอไม่แสดงค่า", "หมุนขณะไม่มีโหลด", "หมุนถอยหลัง", "อื่นๆ"];
+  const remarkOptions: string[] = ["ปกติ", "ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "เปลี่ยนเป็นมิเตอร์อิเล็กทรอนิกส์", "ใช้ไฟเกิน(ct ไหม้)", "ไม่หมุน", "หมุนติดขัด", "ฝาครอบแตก", "ตราข้างชำรุด", "จอไม่แสดงค่า", "หมุนขณะไม่มีโหลด", "หมุนถอยหลัง", "อื่นๆ"];
 
   // ✅ ฟังก์ชันแสดงรูปภาพ (ปรับปรุงใหม่ให้รูปเดิมขึ้นแน่นอน)
   const getImageUrl = (photoSource: string, type: 'old' | 'new'): string => {

@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType, Result } from "@zxing/library";
 
 // --- 1. Interfaces & Types ---
-type WorkerInfo = { 
-  worker: string; 
-  jobType: "incident" | "service" 
+type WorkerInfo = {
+  worker: string;
+  jobType: "incident" | "service"
 };
 
 interface InputGroupProps {
@@ -55,16 +55,16 @@ export default function MultiStepMeterForm() {
   const [remark, setRemark] = useState("ไหม้ทั้งเครื่อง");
   const [remarkDetails, setRemarkDetails] = useState("");
   const [location, setLocation] = useState({ lat: "", lng: "" });
-  
+
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
-  const [scanning, setScanning] = useState<{ active: boolean; target: "old" | "new" }>({ 
-    active: false, 
-    target: "old" 
+  const [scanning, setScanning] = useState<{ active: boolean; target: "old" | "new" }>({
+    active: false,
+    target: "old"
   });
 
-  const remarkOptions: string[] = ["ปกติ","ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า","เปลี่ยนเป็นมิเตอร์อิเล็กทรอนิกส์", "ใช้ไฟเกิน(ct ไหม้)","ไม่หมุน","หมุนติดขัด","ฝาครอบแตก","ตราข้างชำรุด","จอไม่แสดงค่า","หมุนขณะไม่มีโหลด","หมุนถอยหลัง","อื่นๆ"];
+  const remarkOptions: string[] = ["ปกติ", "ไหม้ทั้งเครื่อง", "ที่ต่อสายไหม้", "น้ำเข้า", "เปลี่ยนเป็นมิเตอร์อิเล็กทรอนิกส์", "ใช้ไฟเกิน(ct ไหม้)", "ไม่หมุน", "หมุนติดขัด", "ฝาครอบแตก", "ตราข้างชำรุด", "จอไม่แสดงค่า", "หมุนขณะไม่มีโหลด", "หมุนถอยหลัง", "อื่นๆ"];
 
   // --- 2. ฟังก์ชันบีบอัดรูปภาพ ---
   const compressImage = async (file: File): Promise<Blob> => {
@@ -76,7 +76,7 @@ export default function MultiStepMeterForm() {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 1200; 
+          const MAX_WIDTH = 1200;
           const scaleSize = MAX_WIDTH / img.width;
           canvas.width = MAX_WIDTH;
           canvas.height = img.height * scaleSize;
@@ -97,96 +97,96 @@ export default function MultiStepMeterForm() {
     if (!workerInfo) { router.push("/"); }
   }, [workerInfo, router]);
 
-useEffect(() => {
-  let codeReader: BrowserMultiFormatReader | null = null;
+  useEffect(() => {
+    let codeReader: BrowserMultiFormatReader | null = null;
 
-  if (scanning.active && videoRef.current) {
-    const hints = new Map();
-    // 1. ระบุ Format เดียวเพื่อความเร็วสูงสุด
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
-    // 2. 🔥 TRY_HARDER ต้องเปิดไว้เพื่อรุ่น Mascell
-    hints.set(DecodeHintType.TRY_HARDER, true);
-    // 3. ❌ PURE_BARCODE ต้องเป็น false เท่านั้น
-    hints.set(DecodeHintType.PURE_BARCODE, false);
+    if (scanning.active && videoRef.current) {
+      const hints = new Map();
+      // 1. ระบุ Format เดียวเพื่อความเร็วสูงสุด
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
+      // 2. 🔥 TRY_HARDER ต้องเปิดไว้เพื่อรุ่น Mascell
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      // 3. ❌ PURE_BARCODE ต้องเป็น false เท่านั้น
+      hints.set(DecodeHintType.PURE_BARCODE, false);
 
-    // ใช้ความเร็วในการวิเคราะห์ที่ 300ms เพื่อความเสถียร
-    codeReader = new BrowserMultiFormatReader(hints, 300);
+      // ใช้ความเร็วในการวิเคราะห์ที่ 300ms เพื่อความเสถียร
+      codeReader = new BrowserMultiFormatReader(hints, 300);
 
-    const videoConstraints: MediaTrackConstraints = {
-      facingMode: "environment",
-      // ปรับความละเอียดมาที่ 720p เพื่อให้ Focus ได้ง่ายขึ้นในมือถือ
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-    };
+      const videoConstraints: MediaTrackConstraints = {
+        facingMode: "environment",
+        // ปรับความละเอียดมาที่ 720p เพื่อให้ Focus ได้ง่ายขึ้นในมือถือ
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
 
-    codeReader.decodeFromConstraints(
-      { video: videoConstraints },
-      videoRef.current,
-      (result, error) => {
-        if (result) {
-          const text = result.getText().replace(/\D/g, "");
+      codeReader.decodeFromConstraints(
+        { video: videoConstraints },
+        videoRef.current,
+        (result, error) => {
+          if (result) {
+            const text = result.getText().replace(/\D/g, "");
 
-          // กรองเลข PEA (ส่วนใหญ่ 9-10 หลัก)
-          if (text.length >= 9) {
-            if (scanning.target === "old") setPeaOld(text);
-            else setPeaNew(text);
+            // กรองเลข PEA (ส่วนใหญ่ 9-10 หลัก)
+            if (text.length >= 9) {
+              if (scanning.target === "old") setPeaOld(text);
+              else setPeaNew(text);
 
-            // เช็คสิทธิ์การสั่นก่อนเรียกใช้
-            if (typeof window !== "undefined" && navigator.vibrate) {
-              navigator.vibrate(100);
+              // เช็คสิทธิ์การสั่นก่อนเรียกใช้
+              if (typeof window !== "undefined" && navigator.vibrate) {
+                navigator.vibrate(100);
+              }
+              setScanning(prev => ({ ...prev, active: false }));
             }
-            setScanning(prev => ({ ...prev, active: false }));
           }
+          // error ปล่อยผ่านเพื่อให้ loop ต่อไป
         }
-        // error ปล่อยผ่านเพื่อให้ loop ต่อไป
-      }
-    ).catch((err) => {
-      console.error("Camera access error:", err);
-    });
-  }
-
-  return () => {
-    if (codeReader) {
-      codeReader.reset();
+      ).catch((err) => {
+        console.error("Camera access error:", err);
+      });
     }
-  };
-}, [scanning.active, scanning.target]);
+
+    return () => {
+      if (codeReader) {
+        codeReader.reset();
+      }
+    };
+  }, [scanning.active, scanning.target]);
 
 
 
 
-const getCurrentLocation = useCallback(() => {
+  const getCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) return alert("ไม่รองรับ GPS");
-    
+
     setIsLocating(true);
 
     // ตั้งค่าความแม่นยำสูง
     const gpsOptions: PositionOptions = {
-enableHighAccuracy: true, // หรือลองเปลี่ยนเป็น false ถ้าอยู่ในตึก
-  timeout: 20000,           // เพิ่มเป็น 20 วินาที
-  maximumAge: 30000          
+      enableHighAccuracy: true, // หรือลองเปลี่ยนเป็น false ถ้าอยู่ในตึก
+      timeout: 20000,           // เพิ่มเป็น 20 วินาที
+      maximumAge: 30000
     };
 
     navigator.geolocation.getCurrentPosition(
       (pos: GeolocationPosition) => {
         const lat = pos.coords.latitude.toString();
         const lng = pos.coords.longitude.toString();
-        
+
         setLocation({ lat, lng });
         setIsLocating(false);
 
         // แสดง Alert แจ้งเตือนเมื่อสำเร็จ
         alert(`📍 ดึงพิกัดสำเร็จ!\nละติจูด: ${lat}\nลองจิจูด: ${lng}`);
-      }, 
-      (err) => { 
+      },
+      (err) => {
         let errorMsg = "ดึงพิกัดไม่สำเร็จ";
         if (err.code === 1) errorMsg = "กรุณาเปิดสิทธิ์เข้าถึงตำแหน่ง (Permission Denied)";
         if (err.code === 2) errorMsg = "ไม่สามารถระบุตำแหน่งได้ (Position Unavailable)";
         if (err.code === 3) errorMsg = "ค้นหาพิกัดนานเกินไป (Timeout)";
-        
-        alert(`❌ ${errorMsg}`); 
-        setIsLocating(false); 
-      }, 
+
+        alert(`❌ ${errorMsg}`);
+        setIsLocating(false);
+      },
       gpsOptions
     );
   }, []);
@@ -194,14 +194,28 @@ enableHighAccuracy: true, // หรือลองเปลี่ยนเป็
   const handleNext = () => setStep(s => Math.min(s + 1, 3));
   const handleBack = () => step === 1 ? router.push("/") : setStep(s => s - 1);
 
-const handleSave = async () => {
+  const handleSave = async () => {
     if (!workerInfo || isSubmitting) return;
     setIsSubmitting(true);
 
+    // --- Validation Logic ---
+    if (!peaOld.trim()) {
+      alert("❌ กรุณาระบุเลข PEA เก่า");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const isNormalOrOther = remark === "ปกติ" || remark === "อื่นๆ";
+    if (!isNormalOrOther && !peaNew.trim()) {
+      alert("❌ กรณีสับเปลี่ยนมิเตอร์ ต้องระบุเลข PEA ใหม่");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const timestamp = new Date().toLocaleString("th-TH");
-      const finalRemark = remark === "ปกติ" && remarkDetails 
-        ? `ปกติ: ${remarkDetails}` 
+      const finalRemark = remark === "ปกติ" && remarkDetails
+        ? `ปกติ: ${remarkDetails}`
         : remark;
 
       // --- [1. เตรียมข้อมูลก้อนเดียวในรูปแบบ FormData] ---
@@ -229,9 +243,9 @@ const handleSave = async () => {
       }
 
       // --- [2. ส่งข้อมูลไปที่ API หลักตัวเดียว] ---
-      const res = await fetch("/api/saveMeter", { 
-        method: "POST", 
-        body: formData 
+      const res = await fetch("/api/saveMeter", {
+        method: "POST",
+        body: formData
       });
 
       const result = await res.json();
@@ -239,7 +253,7 @@ const handleSave = async () => {
       // --- [3. ตรวจสอบและแจ้งผล] ---
       if (res.ok && result.success) {
         alert("บันทึกข้อมูลเรียบร้อย ✅ (Cloudinary + MongoDB + Google Sheets)");
-        localStorage.removeItem("worker_info"); 
+        localStorage.removeItem("worker_info");
         router.push("/");
       } else {
         throw new Error(result.error || "บันทึกไม่สำเร็จ");
@@ -257,52 +271,52 @@ const handleSave = async () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-10 font-sans overflow-x-hidden">
-      
+
       {/* 🔴 Scanner UI: ปรับเส้นแดงใหญ่ และมีเส้นเล็กตรงกลาง */}
-{scanning.active && (
-  <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden font-sans">
-    <div className="relative w-full h-full">
-      <video ref={videoRef} className="w-full h-full object-cover" playsInline />
-      
-      {/* Overlay Layer */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        {/* กรอบเล็งแบบแนวตั้ง (สูง 80 กว้าง 56) */}
-        <div className="relative w-56 h-80 border-2 border-white/20 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] flex items-center justify-center">
-          
-          {/* มุมกรอบสีขาว (หนาและเด่นชัด) */}
-          <div className="absolute -top-1 -left-1 w-12 h-12 border-t-[10px] border-l-[10px] border-white rounded-tl-3xl"></div>
-          <div className="absolute -top-1 -right-1 w-12 h-12 border-t-[10px] border-r-[10px] border-white rounded-tr-3xl"></div>
-          <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-[10px] border-l-[10px] border-white rounded-bl-3xl"></div>
-          <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-[10px] border-r-[10px] border-white rounded-br-3xl"></div>
+      {scanning.active && (
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden font-sans">
+          <div className="relative w-full h-full">
+            <video ref={videoRef} className="w-full h-full object-cover" playsInline />
 
-          {/* ⚡ เส้นเลเซอร์สีแดง (แนวตั้ง - วิ่งซ้ายไปขวา) */}
-          <div className="absolute top-0 w-1.5 h-full bg-red-600 shadow-[0_0_20px_#dc2626] animate-scan-line-vertical"></div>
+            {/* Overlay Layer */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              {/* กรอบเล็งแบบแนวตั้ง (สูง 80 กว้าง 56) */}
+              <div className="relative w-56 h-80 border-2 border-white/20 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] flex items-center justify-center">
 
-          {/* ⚡ เส้นกึ่งกลางถาวร (แนวตั้ง) */}
-          <div className="h-[90%] w-[2px] bg-red-500/40 shadow-[0_0_8px_#ef4444]"></div>
+                {/* มุมกรอบสีขาว (หนาและเด่นชัด) */}
+                <div className="absolute -top-1 -left-1 w-12 h-12 border-t-[10px] border-l-[10px] border-white rounded-tl-3xl"></div>
+                <div className="absolute -top-1 -right-1 w-12 h-12 border-t-[10px] border-r-[10px] border-white rounded-tr-3xl"></div>
+                <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-[10px] border-l-[10px] border-white rounded-bl-3xl"></div>
+                <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-[10px] border-r-[10px] border-white rounded-br-3xl"></div>
+
+                {/* ⚡ เส้นเลเซอร์สีแดง (แนวตั้ง - วิ่งซ้ายไปขวา) */}
+                <div className="absolute top-0 w-1.5 h-full bg-red-600 shadow-[0_0_20px_#dc2626] animate-scan-line-vertical"></div>
+
+                {/* ⚡ เส้นกึ่งกลางถาวร (แนวตั้ง) */}
+                <div className="h-[90%] w-[2px] bg-red-500/40 shadow-[0_0_8px_#ef4444]"></div>
+              </div>
+
+              <p className="mt-12 text-white font-black text-2xl tracking-widest drop-shadow-[0_2px_10px_rgba(0,0,0,1)]">
+                สแกนบาร์โค้ดแนวตั้ง
+              </p>
+              <p className="mt-12 text-white font-black text-2xl tracking-widest drop-shadow-[0_2px_10px_rgba(0,0,0,1)]">
+                เอียงมิเตอร์แนวนอน
+              </p>
+
+            </div>
+
+            {/* ปุ่มยกเลิก */}
+            <div className="absolute bottom-10 w-full px-10">
+              <button
+                onClick={() => setScanning(p => ({ ...p, active: false }))}
+                className="w-full py-6 bg-red-600/20 backdrop-blur-xl border-2 border-red-500/50 text-white text-2xl font-black rounded-3xl active:scale-95 transition-all"
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
         </div>
-
-        <p className="mt-12 text-white font-black text-2xl tracking-widest drop-shadow-[0_2px_10px_rgba(0,0,0,1)]">
-          สแกนบาร์โค้ดแนวตั้ง
-        </p>
-        <p className="mt-12 text-white font-black text-2xl tracking-widest drop-shadow-[0_2px_10px_rgba(0,0,0,1)]">
-          เอียงมิเตอร์แนวนอน
-        </p>
-       
-      </div>
-
-      {/* ปุ่มยกเลิก */}
-      <div className="absolute bottom-10 w-full px-10">
-        <button 
-          onClick={() => setScanning(p => ({ ...p, active: false }))} 
-          className="w-full py-6 bg-red-600/20 backdrop-blur-xl border-2 border-red-500/50 text-white text-2xl font-black rounded-3xl active:scale-95 transition-all"
-        >
-          ยกเลิก
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
       {/* Header */}
       <div className="bg-white border-b border-slate-100 p-5 sticky top-0 z-10 flex justify-between items-center shadow-sm">
@@ -311,15 +325,14 @@ const handleSave = async () => {
       </div>
 
       <div className="max-w-md mx-auto px-4 mt-6">
-        
+
         {/* --- Timeline Step Indicator --- */}
         <div className="flex items-center justify-between px-6 mb-6">
           {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center flex-1 last:flex-none">
-              <div 
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 ${
-                  step >= s ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "bg-white text-slate-300 border-2 border-slate-100"
-                }`}
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 ${step >= s ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "bg-white text-slate-300 border-2 border-slate-100"
+                  }`}
               >
                 {step > s ? "✓" : s}
               </div>
@@ -333,14 +346,14 @@ const handleSave = async () => {
         {/* Main Card */}
         <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 p-8 space-y-10 border border-slate-50 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-2 bg-slate-50">
-             <div 
-                className="h-full bg-blue-600 transition-all duration-500 ease-out" 
-                style={{ width: `${(step / 3) * 100}%` }}
-             ></div>
+            <div
+              className="h-full bg-blue-600 transition-all duration-500 ease-out"
+              style={{ width: `${(step / 3) * 100}%` }}
+            ></div>
           </div>
 
           <h2 className="text-2xl font-black text-center text-[#334155] tracking-tight bg-[#f8fafc] py-4 rounded-3xl">
-             📌 {step === 1 ? "ข้อมูลมิเตอร์เก่า" : step === 2 ? "ข้อมูลมิเตอร์ใหม่" : "พิกัดปฏิบัติงาน"}
+            📌 {step === 1 ? "ข้อมูลมิเตอร์เก่า" : step === 2 ? "ข้อมูลมิเตอร์ใหม่" : "พิกัดปฏิบัติงาน"}
           </h2>
 
           <div className="space-y-8">
@@ -358,7 +371,7 @@ const handleSave = async () => {
                 <PhotoUpload label="ถ่ายรูปมิเตอร์ใหม่" photo={photoNew} onPhotoChange={setPhotoNew} />
               </>
             )}
-{step === 3 && (
+            {step === 3 && (
               <div className="space-y-8">
                 <button onClick={getCurrentLocation} className="w-full py-6 bg-blue-600 text-white rounded-[2rem] text-xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-all">
                   📍 {location.lat ? "อัปเดตพิกัดแล้ว" : "เช็คอินพิกัด GPS"}
@@ -366,15 +379,15 @@ const handleSave = async () => {
                 <div className="space-y-3">
                   <label className="text-lg font-black text-slate-700 ml-2 block">สาเหตุการเปลี่ยน</label>
                   <div className="relative">
-                    <select 
-                      value={remark} 
-                      onChange={(e) => setRemark(e.target.value)} 
+                    <select
+                      value={remark}
+                      onChange={(e) => setRemark(e.target.value)}
                       className="w-full p-5 bg-[#f8fafc] border border-slate-100 rounded-[2rem] text-xl font-bold text-slate-800 appearance-none outline-none focus:border-blue-400 shadow-inner"
                     >
                       {remarkOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                     <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                     </div>
                   </div>
 
@@ -412,7 +425,7 @@ const handleSave = async () => {
         </div>
       </div>
 
-     <style jsx global>{`
+      <style jsx global>{`
   @keyframes scan-line-vertical {
     0% { left: 5%; opacity: 0.5; }
     50% { left: 95%; opacity: 1; }
@@ -432,18 +445,18 @@ function InputGroup({ label, value, onChange, placeholder, type = "text", onScan
     <div className="space-y-3 w-full">
       <label className="text-lg font-bold text-[#475569] ml-2 block tracking-tight">{label}</label>
       <div className="relative flex items-center">
-        <input 
-          type={type} value={value} onChange={(e) => onChange(e.target.value)} 
-          placeholder={placeholder} 
-          className="w-full p-5 bg-[#f8fafc] border border-slate-100 rounded-[1.8rem] font-bold text-lg text-slate-700 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50/50 transition-all placeholder:text-slate-300 shadow-inner" 
+        <input
+          type={type} value={value} onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full p-5 bg-[#f8fafc] border border-slate-100 rounded-[1.8rem] font-bold text-lg text-slate-700 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50/50 transition-all placeholder:text-slate-300 shadow-inner"
         />
         {onScanClick && (
-          <button 
-            onClick={onScanClick} 
+          <button
+            onClick={onScanClick}
             className="absolute right-2 w-14 h-14 bg-black text-white rounded-full flex flex-col items-center justify-center active:scale-90 transition-all shadow-md"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-               <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 17v2a2 2 0 0 0 2 2h2"/><line x1="8" y1="12" x2="16" y2="12" stroke="#ef4444" strokeWidth="4"></line>
+              <path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M3 17v2a2 2 0 0 0 2 2h2" /><line x1="8" y1="12" x2="16" y2="12" stroke="#ef4444" strokeWidth="4"></line>
             </svg>
             <span className="text-[8px] mt-0.5 font-black uppercase text-white">สแกน</span>
           </button>
@@ -464,9 +477,9 @@ function PhotoUpload({ label, photo, onPhotoChange }: PhotoUploadProps) {
             {photo ? "จัดเก็บรูปภาพแล้ว" : "ถ่ายรูปมิเตอร์"}
           </span>
         </div>
-        <input 
-          type="file" accept="image/*" capture="environment" className="hidden" 
-          onChange={(e) => onPhotoChange(e.target.files ? e.target.files[0] : null)} 
+        <input
+          type="file" accept="image/*" capture="environment" className="hidden"
+          onChange={(e) => onPhotoChange(e.target.files ? e.target.files[0] : null)}
         />
       </label>
     </div>

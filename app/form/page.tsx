@@ -212,6 +212,12 @@ export default function MultiStepMeterForm() {
       return;
     }
 
+    // Confirm before sending
+    if (!window.confirm("ยืนยันการส่งข้อมูล?")) {
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const timestamp = new Date().toLocaleString("th-TH");
       const finalRemark = remark === "ปกติ" && remarkDetails
@@ -252,7 +258,7 @@ export default function MultiStepMeterForm() {
 
       // --- [3. ตรวจสอบและแจ้งผล] ---
       if (res.ok && result.success) {
-        alert("บันทึกข้อมูลเรียบร้อย ✅ (Cloudinary + MongoDB + Google Sheets)");
+        alert("บันทึกข้อมูลเรียบร้อย ✅");
         localStorage.removeItem("worker_info");
         router.push("/");
       } else {

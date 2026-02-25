@@ -15,8 +15,10 @@ import {
   Timer,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2 // New icon for Normal
+  CheckCircle2, // New icon for Normal
+  Download
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface MeterData {
   _id: string;
@@ -44,6 +46,9 @@ export default function Dashboard() {
   const [filterRemark, setFilterRemark] = useState("");
   const [filterJobType, setFilterJobType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all"); // all, onsite, done
+
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -107,9 +112,41 @@ export default function Dashboard() {
         matchStatus = ((item.remark && item.remark.startsWith("ปกติ")) || item.remark === "อื่นๆ") && (!item.meterIdNew || item.meterIdNew === "");
       }
 
-      return matchWorker && matchOldId && matchNewId && matchRemark && matchJobType && matchStatus;
+      let matchDate = true;
+      if (filterStartDate || filterEndDate) {
+        if (item.recordedAt) {
+          let itemDate: Date | null = null;
+          if (item.recordedAt.includes("T") || item.recordedAt.includes("-")) {
+            itemDate = new Date(item.recordedAt);
+          } else {
+            const parts = item.recordedAt.split(" ")[0].split("/");
+            if (parts.length === 3) {
+              const d = parseInt(parts[0], 10);
+              const m = parseInt(parts[1], 10) - 1;
+              let y = parseInt(parts[2], 10);
+              if (y > 2500) y -= 543;
+              itemDate = new Date(y, m, d);
+            }
+          }
+
+          if (itemDate && !isNaN(itemDate.getTime())) {
+            if (filterStartDate) {
+              const start = new Date(filterStartDate);
+              start.setHours(0, 0, 0, 0);
+              if (itemDate < start) matchDate = false;
+            }
+            if (filterEndDate) {
+              const end = new Date(filterEndDate);
+              end.setHours(23, 59, 59, 999);
+              if (itemDate > end) matchDate = false;
+            }
+          }
+        }
+      }
+
+      return matchWorker && matchOldId && matchNewId && matchRemark && matchJobType && matchStatus && matchDate;
     });
-  }, [data, filterWorker, filterOldId, filterNewId, filterRemark, filterJobType, filterStatus]);
+  }, [data, filterWorker, filterOldId, filterNewId, filterRemark, filterJobType, filterStatus, filterStartDate, filterEndDate]);
 
   // Calculate Pagination
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -117,6 +154,31 @@ export default function Dashboard() {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredData.slice(start, start + itemsPerPage);
   }, [filteredData, currentPage]);
+
+  // Export to Excel function
+  const handleExportExcel = () => {
+    const exportData = filteredData.map((item, index) => ({
+      "ลำดับ": index + 1,
+      "เวลาบันทึก": item.recordedAt,
+      "พนักงาน": item.worker,
+      "ประเภทงาน": item.jobType === "incident" ? "แก้ไฟ" : "บริการ",
+      "สาเหตุ/หมายเหตุ": item.remark || "-",
+      "มิเตอร์เก่า": item.meterIdOld,
+      "หน่วยเก่า": item.readingOld,
+      "มิเตอร์ใหม่": item.meterIdNew,
+      "หน่วยใหม่": item.readingNew,
+      "ละติจูด": item.location?.lat || "",
+      "ลองจิจูด": item.location?.lng || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+
+    // ตั้งชื่อไฟล์ตามเวลาที่ถูกโหลดออกมา + จำนวนเรคคอร์ด
+    const dateStr = new Date().toISOString().split("T")[0];
+    XLSX.writeFile(workbook, `PEA_Meter_Report_${dateStr}_(${filteredData.length}_records).xlsx`);
+  };
 
   // Reset page when filter changes - REMOVED useEffect to avoid cascading renders
   // Instead, we will reset page in the event handlers directly.
@@ -270,9 +332,20 @@ export default function Dashboard() {
 
         {/* Filters Section */}
         <div className="bg-white rounded-3xl shadow-sm border border-[#E0D4FC] p-6 mb-8">
-          <div className="flex items-center gap-2 mb-6 text-[#742D9D]">
-            <Filter className="w-5 h-5" />
-            <h3 className="font-bold text-lg">ตัวกรองค้นหา</h3>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2 text-[#742D9D]">
+              <Filter className="w-5 h-5" />
+              <h3 className="font-bold text-lg">ตัวกรองค้นหา</h3>
+            </div>
+
+            <button
+              onClick={handleExportExcel}
+              disabled={filteredData.length === 0}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 text-white rounded-xl font-bold shadow-md shadow-emerald-200 hover:bg-emerald-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Download className="w-5 h-5" />
+              ส่งออก Excel
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -396,6 +469,37 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+
+            {/* Date Pickers */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> ตั้งแต่วันที่
+              </label>
+              <input
+                type="date"
+                className="w-full bg-slate-50 p-3.5 px-5 rounded-xl outline-none text-slate-700 font-bold border-2 border-transparent focus:bg-white focus:border-[#742D9D] transition-all shadow-sm"
+                value={filterStartDate}
+                onChange={(e) => {
+                  setFilterStartDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> ถึงวันที่
+              </label>
+              <input
+                type="date"
+                className="w-full bg-slate-50 p-3.5 px-5 rounded-xl outline-none text-slate-700 font-bold border-2 border-transparent focus:bg-white focus:border-[#742D9D] transition-all shadow-sm"
+                value={filterEndDate}
+                onChange={(e) => {
+                  setFilterEndDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+
           </div>
         </div>
 

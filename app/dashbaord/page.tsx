@@ -16,9 +16,15 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2, // New icon for Normal
-  Download
+  Download,
+  BrainCircuit,
+  CheckCircle,
+  XCircle,
+  AlertCircle
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import Zoom from 'react-medium-image-zoom';
+import 'react-medium-image-zoom/dist/styles.css';
 
 interface MeterData {
   _id: string;
@@ -56,6 +62,17 @@ export default function Dashboard() {
 
   // UI State
   const [isRemarkOpen, setIsRemarkOpen] = useState(false);
+
+  // AI Verification State
+  interface VerificationResult {
+    isMatch: boolean;
+    confidence: number;
+    extractedPea: string | null;
+    extractedUnit: string | null;
+    reason: string;
+  }
+  const [aiStatus, setAiStatus] = useState<Record<string, { loading: boolean, result?: VerificationResult, error?: string }>>({});
+  const [expandedAi, setExpandedAi] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch("/api/mongo/get-meters")
@@ -178,6 +195,29 @@ export default function Dashboard() {
     // ตั้งชื่อไฟล์ตามเวลาที่ถูกโหลดออกมา + จำนวนเรคคอร์ด
     const dateStr = new Date().toISOString().split("T")[0];
     XLSX.writeFile(workbook, `PEA_Meter_Report_${dateStr}_(${filteredData.length}_records).xlsx`);
+  };
+
+  // AI Verification Function
+  const handleVerifyAI = async (id: string, type: 'old' | 'new', imageUrl: string, expectedPea: string, expectedUnit: number) => {
+    const key = `${id}-${type}`;
+    setAiStatus(prev => ({ ...prev, [key]: { loading: true, error: undefined } }));
+
+    try {
+      const res = await fetch("/api/verify-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl, expectedPea, expectedUnit, type }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setAiStatus(prev => ({ ...prev, [key]: { loading: false, result: data.result } }));
+      } else {
+        setAiStatus(prev => ({ ...prev, [key]: { loading: false, error: data.error } }));
+      }
+    } catch (err: any) {
+      setAiStatus(prev => ({ ...prev, [key]: { loading: false, error: err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ AI" } }));
+    }
   };
 
   // Reset page when filter changes - REMOVED useEffect to avoid cascading renders
@@ -552,13 +592,79 @@ export default function Dashboard() {
                         <span className="text-[14px] font-black text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded mb-2 w-fit">PEA: {item.meterIdOld}</span>
                         <span className="text-[14px] font-black text-red-500 font-mono tracking-tight">หน่วย: {item.readingOld}</span>
                         {item.photoOldUrl && (
-                          <div className="mt-3 relative group/img cursor-zoom-in">
-                            <div className="w-12 h-12 rounded-full border-2 border-white shadow-md overflow-hidden bg-slate-200">
-                              <img src={item.photoOldUrl} className="w-full h-full object-cover" alt="Old" />
-                            </div>
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 opacity-0 pointer-events-none group-hover/img:opacity-100 group-hover/img:pointer-events-auto transition-all z-50 transform scale-95 group-hover/img:scale-100">
-                              <img src={item.photoOldUrl} className="w-full rounded-xl shadow-2xl border-4 border-white" alt="Zoom Old" />
-                            </div>
+                          <div className="mt-3 relative">
+                            <Zoom>
+                              <div className="w-12 h-12 rounded-full border-2 border-white shadow-md overflow-hidden bg-slate-200 inline-block cursor-zoom-in">
+                                <img src={item.photoOldUrl} className="w-full h-full object-cover hover:scale-110 transition-transform" alt="Old Meter" />
+                              </div>
+                            </Zoom>
+                          </div>
+                        )}
+
+                        {/* AI Verification Section - Old Meter */}
+                        {item.photoOldUrl && (
+                          <div className="mt-4 w-full flex flex-col items-center">
+                            {(() => {
+                              const status = aiStatus[`${item._id}-old`];
+                              if (!status) {
+                                return (
+                                  <button onClick={() => handleVerifyAI(item._id, 'old', item.photoOldUrl!, item.meterIdOld, item.readingOld)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-200">
+                                    <BrainCircuit className="w-3.5 h-3.5" /> AI ตรวจสอบ
+                                  </button>
+                                );
+                              }
+
+                              if (status.loading) {
+                                return (
+                                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 rounded-lg text-xs font-bold border border-slate-200 animate-pulse">
+                                    <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div> กำลังคิด...
+                                  </div>
+                                );
+                              }
+
+                              if (status.error) {
+                                return (
+                                  <div className="flex flex-col items-center gap-1 text-xs">
+                                    <span className="flex items-center gap-1 text-red-500 font-bold bg-red-50 px-2 py-1 rounded-md border border-red-100">
+                                      <AlertCircle className="w-3.5 h-3.5" /> ผิดพลาด
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">{status.error}</span>
+                                  </div>
+                                );
+                              }
+
+                              if (status.result) {
+                                const { isMatch, extractedPea, extractedUnit, reason } = status.result;
+                                const isExpanded = expandedAi[`${item._id}-old`];
+                                return (
+                                  <div className="flex flex-col items-center w-full max-w-[150px]">
+                                    <button
+                                      onClick={() => setExpandedAi(prev => ({ ...prev, [`${item._id}-old`]: !isExpanded }))}
+                                      className={`flex items-center gap-1 w-full justify-between px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isMatch ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'} ${isExpanded ? 'rounded-b-none' : ''}`}
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        {isMatch ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                                        {isMatch ? 'ตรงกัน' : 'ไม่ตรง'}
+                                      </div>
+                                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                    </button>
+
+                                    {isExpanded && (
+                                      <div className={`w-full bg-white p-2 rounded-b-lg border-x border-b text-[10px] text-left leading-relaxed ${isMatch ? 'border-emerald-200 text-emerald-800' : 'border-red-200 text-red-800'} shadow-sm`}>
+                                        <div className="font-semibold mb-1 pb-1 border-b border-opacity-20 border-current opacity-80">สิ่งที่ AI เห็น:</div>
+                                        <div className="grid grid-cols-3 gap-1 mb-1.5">
+                                          <span className="text-opacity-70 opacity-70">รหัส:</span>
+                                          <span className="col-span-2 font-mono font-bold">{extractedPea || "-"}</span>
+                                          <span className="text-opacity-70 opacity-70">หน่วย:</span>
+                                          <span className="col-span-2 font-mono font-bold">{extractedUnit || "-"}</span>
+                                        </div>
+                                        <p className="italic opacity-80 mt-1" title={reason}>{reason}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                            })()}
                           </div>
                         )}
                       </div>
@@ -570,13 +676,79 @@ export default function Dashboard() {
                         <span className="text-[14px] font-black text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded mb-2 w-fit">PEA: {item.meterIdNew}</span>
                         <span className="text-[14px] font-black text-emerald-500 font-mono tracking-tight">หน่วย: {item.readingNew}</span>
                         {item.photoNewUrl && (
-                          <div className="mt-3 relative group/img cursor-zoom-in">
-                            <div className="w-12 h-12 rounded-full border-2 border-white shadow-md overflow-hidden bg-slate-200">
-                              <img src={item.photoNewUrl} className="w-full h-full object-cover" alt="New" />
-                            </div>
-                            <div className="absolute top-full right-1/2 translate-x-1/2 mt-2 w-48 opacity-0 pointer-events-none group-hover/img:opacity-100 group-hover/img:pointer-events-auto transition-all z-50 transform scale-95 group-hover/img:scale-100">
-                              <img src={item.photoNewUrl} className="w-full rounded-xl shadow-2xl border-4 border-white" alt="Zoom New" />
-                            </div>
+                          <div className="mt-3 relative">
+                            <Zoom>
+                              <div className="w-12 h-12 rounded-full border-2 border-white shadow-md overflow-hidden bg-slate-200 inline-block cursor-zoom-in">
+                                <img src={item.photoNewUrl} className="w-full h-full object-cover hover:scale-110 transition-transform" alt="New Meter" />
+                              </div>
+                            </Zoom>
+                          </div>
+                        )}
+
+                        {/* AI Verification Section - New Meter */}
+                        {item.photoNewUrl && (
+                          <div className="mt-4 w-full flex flex-col items-center">
+                            {(() => {
+                              const status = aiStatus[`${item._id}-new`];
+                              if (!status) {
+                                return (
+                                  <button onClick={() => handleVerifyAI(item._id, 'new', item.photoNewUrl!, item.meterIdNew, item.readingNew)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-200">
+                                    <BrainCircuit className="w-3.5 h-3.5" /> AI ตรวจสอบ
+                                  </button>
+                                );
+                              }
+
+                              if (status.loading) {
+                                return (
+                                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 rounded-lg text-xs font-bold border border-slate-200 animate-pulse">
+                                    <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div> กำลังคิด...
+                                  </div>
+                                );
+                              }
+
+                              if (status.error) {
+                                return (
+                                  <div className="flex flex-col items-center gap-1 text-xs">
+                                    <span className="flex items-center gap-1 text-red-500 font-bold bg-red-50 px-2 py-1 rounded-md border border-red-100">
+                                      <AlertCircle className="w-3.5 h-3.5" /> ผิดพลาด
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">{status.error}</span>
+                                  </div>
+                                );
+                              }
+
+                              if (status.result) {
+                                const { isMatch, extractedPea, extractedUnit, reason } = status.result;
+                                const isExpanded = expandedAi[`${item._id}-new`];
+                                return (
+                                  <div className="flex flex-col items-center w-full max-w-[150px]">
+                                    <button
+                                      onClick={() => setExpandedAi(prev => ({ ...prev, [`${item._id}-new`]: !isExpanded }))}
+                                      className={`flex items-center gap-1 w-full justify-between px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isMatch ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'} ${isExpanded ? 'rounded-b-none' : ''}`}
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        {isMatch ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                                        {isMatch ? 'ตรงกัน' : 'ไม่ตรง'}
+                                      </div>
+                                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                    </button>
+
+                                    {isExpanded && (
+                                      <div className={`w-full bg-white p-2 rounded-b-lg border-x border-b text-[10px] text-left leading-relaxed ${isMatch ? 'border-emerald-200 text-emerald-800' : 'border-red-200 text-red-800'} shadow-sm`}>
+                                        <div className="font-semibold mb-1 pb-1 border-b border-opacity-20 border-current opacity-80">สิ่งที่ AI เห็น:</div>
+                                        <div className="grid grid-cols-3 gap-1 mb-1.5">
+                                          <span className="text-opacity-70 opacity-70">รหัส:</span>
+                                          <span className="col-span-2 font-mono font-bold">{extractedPea || "-"}</span>
+                                          <span className="text-opacity-70 opacity-70">หน่วย:</span>
+                                          <span className="col-span-2 font-mono font-bold">{extractedUnit || "-"}</span>
+                                        </div>
+                                        <p className="italic opacity-80 mt-1" title={reason}>{reason}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                            })()}
                           </div>
                         )}
                       </div>

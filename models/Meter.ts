@@ -2,8 +2,8 @@ import mongoose, { Schema, model, models } from 'mongoose';
 
 const MeterSchema = new Schema({
   worker: String,
-  meterIdNew: { 
-    type: String, 
+  meterIdNew: {
+    type: String,
     ref: 'Inventory' // <--- บอกว่าเลขนี้อ้างอิงมาจาก Model ที่ชื่อ Inventory
     , index: true
   },
@@ -13,10 +13,15 @@ const MeterSchema = new Schema({
   // meterIdNew: String,
   readingNew: Number,
   remark: String,
-  
+
   // --- เพิ่ม 2 บรรทัดนี้เข้าไปครับ ---
   photoOldUrl: String, // เก็บลิงก์รูปเก่าจาก Cloudinary
   photoNewUrl: String, // เก็บลิงก์รูปใหม่จาก Cloudinary
+  // ----------------------------
+
+  // --- เก็บผลลัพธ์จาก AI ---
+  aiVerificationOld: { type: Schema.Types.Mixed }, // { isMatch, confidence, extractedPea, extractedUnit, reason }
+  aiVerificationNew: { type: Schema.Types.Mixed }, // { isMatch, confidence, extractedPea, extractedUnit, reason }
   // ----------------------------
 
   location: {

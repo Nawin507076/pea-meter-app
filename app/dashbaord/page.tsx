@@ -40,6 +40,8 @@ interface MeterData {
   location: { lat: string; lng: string };
   recordedAt: string;
   status?: string;
+  aiVerificationOld?: any;
+  aiVerificationNew?: any;
 }
 
 export default function Dashboard() {
@@ -78,7 +80,20 @@ export default function Dashboard() {
     fetch("/api/mongo/get-meters")
       .then((res) => res.json())
       .then((res) => {
-        if (res.success) setData(res.data);
+        if (res.success) {
+          setData(res.data);
+          // Initialize AI status from database if exists
+          const initialAiStatus: Record<string, { loading: boolean, result?: VerificationResult, error?: string }> = {};
+          res.data.forEach((item: MeterData) => {
+            if (item.aiVerificationOld) {
+              initialAiStatus[`${item._id}-old`] = { loading: false, result: item.aiVerificationOld };
+            }
+            if (item.aiVerificationNew) {
+              initialAiStatus[`${item._id}-new`] = { loading: false, result: item.aiVerificationNew };
+            }
+          });
+          setAiStatus(initialAiStatus);
+        }
         setLoading(false);
       });
   }, []);
@@ -212,6 +227,12 @@ export default function Dashboard() {
 
       if (data.success) {
         setAiStatus(prev => ({ ...prev, [key]: { loading: false, result: data.result } }));
+        // Save result to database asynchronously (don't block UI)
+        fetch("/api/mongo/update-ai-result", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ meterId: id, type, result: data.result }),
+        }).catch(err => console.error("Failed to save AI result to DB:", err));
       } else {
         setAiStatus(prev => ({ ...prev, [key]: { loading: false, error: data.error } }));
       }
@@ -651,7 +672,18 @@ export default function Dashboard() {
 
                                     {isExpanded && (
                                       <div className={`w-full bg-white p-2 rounded-b-lg border-x border-b text-[10px] text-left leading-relaxed ${isMatch ? 'border-emerald-200 text-emerald-800' : 'border-red-200 text-red-800'} shadow-sm`}>
-                                        <div className="font-semibold mb-1 pb-1 border-b border-opacity-20 border-current opacity-80">สิ่งที่ AI เห็น:</div>
+                                        <div className="font-semibold mb-1 pb-1 border-b border-opacity-20 border-current opacity-80 flex justify-between items-center">
+                                          <span>สิ่งที่ AI เห็น:</span>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleVerifyAI(item._id, 'old', item.photoOldUrl!, item.meterIdOld, item.readingOld);
+                                            }}
+                                            className="text-[9px] hover:underline opacity-80"
+                                          >
+                                            🔄 ตรวจใหม่
+                                          </button>
+                                        </div>
                                         <div className="grid grid-cols-3 gap-1 mb-1.5">
                                           <span className="text-opacity-70 opacity-70">รหัส:</span>
                                           <span className="col-span-2 font-mono font-bold">{extractedPea || "-"}</span>
@@ -735,7 +767,18 @@ export default function Dashboard() {
 
                                     {isExpanded && (
                                       <div className={`w-full bg-white p-2 rounded-b-lg border-x border-b text-[10px] text-left leading-relaxed ${isMatch ? 'border-emerald-200 text-emerald-800' : 'border-red-200 text-red-800'} shadow-sm`}>
-                                        <div className="font-semibold mb-1 pb-1 border-b border-opacity-20 border-current opacity-80">สิ่งที่ AI เห็น:</div>
+                                        <div className="font-semibold mb-1 pb-1 border-b border-opacity-20 border-current opacity-80 flex justify-between items-center">
+                                          <span>สิ่งที่ AI เห็น:</span>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleVerifyAI(item._id, 'new', item.photoNewUrl!, item.meterIdNew, item.readingNew);
+                                            }}
+                                            className="text-[9px] hover:underline opacity-80"
+                                          >
+                                            🔄 ตรวจใหม่
+                                          </button>
+                                        </div>
                                         <div className="grid grid-cols-3 gap-1 mb-1.5">
                                           <span className="text-opacity-70 opacity-70">รหัส:</span>
                                           <span className="col-span-2 font-mono font-bold">{extractedPea || "-"}</span>

@@ -77,6 +77,12 @@ Please return ONLY a JSON object in the exact format, no markdown formatting:
         return NextResponse.json({ success: true, result: jsonResult });
     } catch (error: any) {
         console.error("Gemini API Error:", error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+
+        let errorMessage = error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ AI";
+        if (error.status === 429 || errorMessage.includes('429') || errorMessage.includes('Quota') || errorMessage.includes('exceeded')) {
+            errorMessage = "ใช้งาน AI เกินโควต้าฟรีที่กำหนด (Rate Limit) กรุณารอสักครู่แล้วลองใหม่ หรือตั้งค่า Billing บน Google AI Studio";
+        }
+
+        return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
     }
 }

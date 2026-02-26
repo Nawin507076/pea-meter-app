@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
 
         // 3. Initialize Gemini API
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        // Using 'gemini-2.0-flash' as 1.5-flash returns 404 for this API key
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        // Using 'gemini-2.5-flash' as 2.0-flash returns 429 Rate Limit
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         // 4. Prompt instruction for Gemini
         const prompt = `You are an AI assistant specialized in reading electricity meters in Thailand.
